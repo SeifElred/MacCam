@@ -9,12 +9,14 @@ struct EnumeratedProcess: Equatable {
 enum ProcessEnumerator {
     /// All processes visible to this user (best-effort via libproc).
     static func allProcesses() -> [EnumeratedProcess] {
-        let bytesNeeded = proc_listpids(PROC_ALL_PIDS, 0, nil, 0)
+        // On some SDKs PROC_ALL_PIDS is Int32; proc_listpids expects UInt32.
+        let type = UInt32(bitPattern: PROC_ALL_PIDS)
+        let bytesNeeded = proc_listpids(type, 0, nil, 0)
         guard bytesNeeded > 0 else { return [] }
 
         let count = Int(bytesNeeded) / MemoryLayout<pid_t>.size
         var pids = [pid_t](repeating: 0, count: count)
-        let filled = proc_listpids(PROC_ALL_PIDS, 0, &pids, Int32(bytesNeeded))
+        let filled = proc_listpids(type, 0, &pids, Int32(bytesNeeded))
         guard filled > 0 else { return [] }
 
         let actualCount = Int(filled) / MemoryLayout<pid_t>.size
