@@ -136,7 +136,7 @@ final class CameraMonitor: ObservableObject {
             mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain)
         )
         var transport: UInt32 = 0
-        var dataSize = UInt32(MemoryLayout<UInt32>.size)
+        let dataSize = UInt32(MemoryLayout<UInt32>.size)
         var dataUsed: UInt32 = 0
         let status = CMIOObjectGetPropertyData(deviceID, &address, 0, nil, dataSize, &dataUsed, &transport)
         return status == 0 ? transport : 0
