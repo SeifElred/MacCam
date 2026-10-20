@@ -1,97 +1,53 @@
-# MacCam — How to use
+# MacCam — How to use (M1 / Apple Silicon)
 
-MacCam is a menu bar privacy guard for macOS 14+. With **Privacy Lock On**, it **disables the camera hardware** — apps stay open, but they cannot use the camera (as if none is connected), and the green LED turns off.
+MacCam disables the **built-in FaceTime camera hardware** while locked so apps behave as if there is no camera, and the **green LED turns off**. Apps are **not** force-quit.
 
-> MacCam does **not** force-quit Zoom, Chrome, FaceTime, etc. It only resets the macOS camera services so the sensor releases.
+On **M1 Pro**, the camera daemon (`appleh13camerad`) is owned by the system. A normal app cannot stop it without a **one-time admin password**.
 
-## Requirements
+> Continuity Camera = using an iPhone as a webcam. You can ignore that if you don’t use your iPhone as a Mac camera.
 
-- Mac with **macOS 14 Sonoma** or later
-- **Xcode Command Line Tools** (for building): `xcode-select --install`
-- Optional: full **Xcode** (for running automated tests)
-
-## Quick start (plug and play)
+## Plug and play
 
 ```bash
-cd MacCam
+git pull
 chmod +x scripts/*.sh
 ./scripts/build.sh
 open dist/MacCam.app
 ```
 
-Look in the **top-right menu bar** for the shield/lock icon.
+## Required once (this is what makes LED-off reliable)
 
-### First launch / Gatekeeper
+1. Open the MacCam menu (shield icon).
+2. Leave **Privacy Lock On**.
+3. Click **Enable LED protection (one-time)**.
+4. Enter your **Mac password** when macOS asks.
+5. Wait until status says **Camera disabled — LED off**.
 
-If macOS says the app can’t be opened:
+That installs a small root helper. After that, MacCam can turn the camera/LED off whenever lock is on — without quitting your apps.
 
-1. Right-click `MacCam.app` → **Open** → **Open**
-2. Or run: `xattr -cr dist/MacCam.app && open dist/MacCam.app`
+## Everyday
 
-## Everyday use
-
-| Goal | What to do |
+| Goal | Action |
 | --- | --- |
-| No camera / LED off | Leave **Privacy Lock On** (default). Opening MacCam turns the camera off. |
-| Join a video call | **Unlock** → use FaceTime/Zoom → **Lock** when done |
-| Start at login | Toggle **Launch at Login** |
-| Silence notifications | Turn off **Notify on attempt** |
+| LED / camera off | Keep Privacy Lock On |
+| Video call | Unlock → use camera → Lock again |
+| Start at login | Enable Launch at Login |
 
-### What “locked” means
+## If LED is still on
 
-- Camera system services are bounced whenever the camera turns on
-- Your apps **keep running** — their camera preview just fails / shows no device
-- Green LED should go off because nothing holds the sensor
-- Camera daemons are often **root-owned**. If the LED stays on, click **Authorize to turn LED off** and enter your Mac password once (macOS admin dialog).
-- **Allow list**: if an allow-listed app is the likely camera user, MacCam won’t disable (optional exception)
-
-### Allow / Block lists
-
-- **Allow list** — optional exception while locked  
-- **Block list** — reserved for future policy (hardware disable already blocks everyone when locked)
-
-## Install to Applications (optional)
+1. Click **Turn LED off now** / **Enable LED protection** again and enter the password.
+2. Or run once in Terminal:
 
 ```bash
-./scripts/build.sh
-./scripts/package.sh
-cp -R dist/MacCam.app /Applications/
-open -a MacCam
+sudo killall -9 appleh13camerad AppleCameraAssistant VDCAssistant UVCAssistant cameracaptured
 ```
 
-## Launch at Login notes
+3. Confirm status is **Camera disabled — LED off** (MacCam only shows that when the system reports the camera is actually off).
 
-1. Enable **Launch at Login** in MacCam.
-2. If macOS asks, approve under **System Settings → General → Login Items & Extensions**.
-
-## Quit
-
-Menu → **Quit MacCam**, or **⌘Q**. After quitting, the camera works normally again.
-
-## Privacy
-
-- Fully local — no network, no accounts, no telemetry
-- Activity log: `~/Library/Application Support/MacCam/activity.json`
-- Camera TCC permission is **not** required
-
-## Limits (honest)
-
-- macOS has no public API for “revoke camera for all apps”; MacCam disables the camera **stack** instead
-- Some camera daemons may need a moment to release; MacCam retries while locked
-- If Continuity Camera (iPhone) is active, disconnect the phone or unlock MacCam
-- If the LED stays on: use **Authorize to turn LED off** in the menu, or run:  
-  `sudo killall -9 appleh13camerad VDCAssistant AppleCameraAssistant UVCAssistant cameracaptured ContinuityCaptureAgent`
-
-## Build with Xcode
+## Uninstall helper (optional)
 
 ```bash
-open MacCam.xcodeproj
+sudo launchctl bootout system/com.maccam.cameradisable
+sudo rm -f /Library/LaunchDaemons/com.maccam.cameradisable.plist
+sudo rm -rf "/Library/Application Support/MacCam"
 ```
-
-## Run automated tests
-
-```bash
-./scripts/test.sh
-```
-
-See [MANUAL_QA.md](MANUAL_QA.md) for hardware checks.

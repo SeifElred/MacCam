@@ -27,6 +27,7 @@ rm -rf "$APP"
 SOURCES=(
   MacCam/MacCamApp.swift
   MacCam/Features/ActivityLog.swift
+  MacCam/Features/CameraDisableHelper.swift
   MacCam/Features/CameraGuard.swift
   MacCam/Features/CameraMonitor.swift
   MacCam/Features/CameraStackReset.swift

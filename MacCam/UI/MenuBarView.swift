@@ -51,8 +51,8 @@ struct MenuBarView: View {
             header
             lockControl
             statusChip
-            if guardService.needsAdminAuthorization && isLocked {
-                authorizeButton
+            if isLocked && (!guardService.helperInstalled || guardService.needsAdminAuthorization) {
+                setupButton
             }
             if let latest = activityLog.recent(1).first {
                 latestLine(latest)
@@ -106,7 +106,7 @@ struct MenuBarView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(DesignTokens.textPrimary)
                         .lineLimit(1)
-                    Text(isLocked ? "No camera for apps · LED off" : "Apps can use the camera")
+                    Text(isLocked ? "Camera off for every app · LED off" : "Apps can use the camera")
                         .font(.system(size: 11))
                         .foregroundStyle(DesignTokens.textSecondary)
                         .lineLimit(1)
@@ -147,27 +147,36 @@ struct MenuBarView: View {
         switch guardService.status {
         case .protected: return DesignTokens.mint
         case .unlocked: return DesignTokens.textSecondary
-        case .disabling, .needsAdmin: return DesignTokens.alert
+        case .disabling, .needsAdmin, .needsSetup: return DesignTokens.alert
         case .cameraActive: return DesignTokens.warning
         }
     }
 
-    private var authorizeButton: some View {
+    private var setupButton: some View {
         Button {
-            guardService.authorizeAdminDisable()
+            if guardService.helperInstalled {
+                guardService.authorizeAdminDisable()
+            } else {
+                guardService.installHelperAndDisable()
+            }
         } label: {
-            HStack {
-                Image(systemName: "key.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                Text(guardService.isBusyDisabling ? "Waiting for password…" : "Authorize to turn LED off")
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: "key.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(setupButtonTitle)
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                Text("M1 Pro needs a one-time password so MacCam can turn the camera hardware off. Apps are not quit.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(DesignTokens.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(DesignTokens.textPrimary)
-            .padding(.horizontal, 12)
-            .frame(height: 36)
-            .background(DesignTokens.alert.opacity(0.18))
+            .padding(12)
+            .background(DesignTokens.alert.opacity(0.16))
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.controlRadius, style: .continuous)
                     .strokeBorder(DesignTokens.alert.opacity(0.45), lineWidth: 1)
@@ -177,6 +186,12 @@ struct MenuBarView: View {
         }
         .buttonStyle(.plain)
         .disabled(guardService.isBusyDisabling)
+    }
+
+    private var setupButtonTitle: String {
+        if guardService.isBusyDisabling { return "Working… enter password if asked" }
+        if guardService.helperInstalled { return "Turn LED off now" }
+        return "Enable LED protection (one-time)"
     }
 
     private func latestLine(_ event: ActivityEvent) -> some View {
