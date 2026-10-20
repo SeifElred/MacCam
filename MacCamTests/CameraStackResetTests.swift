@@ -6,6 +6,7 @@ final class CameraStackResetTests: XCTestCase {
         XCTAssertTrue(CameraStackReset.matchesDaemon("appleh13camerad"))
         XCTAssertTrue(CameraStackReset.matchesDaemon("VDCAssistant"))
         XCTAssertTrue(CameraStackReset.matchesDaemon("AppleCameraAssistant"))
+        XCTAssertTrue(CameraStackReset.matchesDaemon("ContinuityCaptureAgent"))
         XCTAssertFalse(CameraStackReset.matchesDaemon("Finder"))
         XCTAssertFalse(CameraStackReset.matchesDaemon("zoom.us"))
         XCTAssertFalse(CameraStackReset.matchesDaemon("Google Chrome"))

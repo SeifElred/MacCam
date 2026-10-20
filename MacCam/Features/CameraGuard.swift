@@ -11,6 +11,7 @@ enum GuardStatus: Equatable {
     case protected
     case unlocked
     case disabling
+    case needsAdmin
     case cameraActive(appName: String)
 
     var label: String {
@@ -21,6 +22,8 @@ enum GuardStatus: Equatable {
             return "Camera available"
         case .disabling:
             return "Turning camera off…"
+        case .needsAdmin:
+            return "Password needed to turn LED off"
         case .cameraActive(let name):
             return "\(name) is using the camera"
         }
@@ -48,6 +51,9 @@ final class CameraGuard: ObservableObject {
     }
     @Published private(set) var status: GuardStatus = .protected
     @Published private(set) var iconState: MenuBarIconState = .locked
+    /// True when user-level disable failed and admin password is required.
+    @Published private(set) var needsAdminAuthorization: Bool = false
+    @Published private(set) var isBusyDisabling: Bool = false
 
     let policy: PolicyStore
     let activityLog: ActivityLog
@@ -61,12 +67,12 @@ final class CameraGuard: ObservableObject {
 
     private var notifyCooldownUntil: Date = .distantPast
     private var lastDisable: Date = .distantPast
+    private var adminAttemptedThisLockSession = false
     private var statusClearWork: DispatchWorkItem?
     private var tickTimer: Timer?
-    private let lockedTick: TimeInterval = 0.15
+    private let lockedTick: TimeInterval = 0.20
     private let unlockedTick: TimeInterval = 0.40
-    /// How often we may bounce the camera stack while something keeps turning it back on.
-    private let disableCooldown: TimeInterval = 0.75
+    private let disableCooldown: TimeInterval = 0.90
 
     init(
         policy: PolicyStore = PolicyStore(),
@@ -96,9 +102,8 @@ final class CameraGuard: ObservableObject {
         monitor.start()
         restartTickTimer()
         requestNotificationPermissionIfNeeded()
-        // Opening MacCam while locked must clear the LED immediately.
         if mode == .locked {
-            disableCameraNow(reason: "MacCam started", force: true)
+            disableCameraNow(reason: "MacCam started", force: true, preferAdminIfNeeded: true)
         }
     }
 
@@ -111,10 +116,22 @@ final class CameraGuard: ObservableObject {
     func setLocked(_ locked: Bool) {
         mode = locked ? .locked : .unlocked
         if locked {
-            disableCameraNow(reason: "Privacy lock on", force: true)
+            adminAttemptedThisLockSession = false
+            needsAdminAuthorization = false
+            disableCameraNow(reason: "Privacy lock on", force: true, preferAdminIfNeeded: true)
+        } else {
+            needsAdminAuthorization = false
+            isBusyDisabling = false
         }
         restartTickTimer()
         refreshStatus()
+    }
+
+    /// User tapped “Authorize to turn LED off” — shows the macOS password dialog.
+    func authorizeAdminDisable() {
+        guard mode == .locked else { return }
+        adminAttemptedThisLockSession = false
+        disableCameraNow(reason: "Admin authorize", force: true, preferAdminIfNeeded: true)
     }
 
     // MARK: - Internals
@@ -144,9 +161,9 @@ final class CameraGuard: ObservableObject {
         refreshStatus()
     }
 
-    /// Keep the camera hardware off while locked. Never quits user apps.
     private func enforceDisabledCamera() {
         guard mode == .locked else { return }
+        guard !isBusyDisabling else { return }
 
         let allowlistedLikely: Bool = {
             guard let candidate = identifier.identifyLikelyCameraUser() else { return false }
@@ -160,83 +177,111 @@ final class CameraGuard: ObservableObject {
         )
 
         switch action {
-        case .ignore:
-            return
-        case .allowSilently:
+        case .ignore, .allowSilently:
             return
         case .disableHardware:
-            disableCameraNow(reason: "Locked — camera disabled", force: false)
+            // Keep trying unprivileged; escalate to admin only once per lock session unless user taps Authorize.
+            disableCameraNow(
+                reason: "Locked — camera disabled",
+                force: false,
+                preferAdminIfNeeded: !adminAttemptedThisLockSession
+            )
         }
     }
 
-    private func disableCameraNow(reason: String, force: Bool) {
+    private func disableCameraNow(reason: String, force: Bool, preferAdminIfNeeded: Bool) {
         let now = Date()
         if !force, now.timeIntervalSince(lastDisable) < disableCooldown {
-            // Still show “turning off” if LED/sensor still reports on.
             if monitor.isCameraOn {
                 iconState = .alert
-                status = .disabling
+                status = needsAdminAuthorization ? .needsAdmin : .disabling
             }
             return
         }
         lastDisable = now
+        isBusyDisabling = true
         iconState = .alert
         status = .disabling
 
-        _ = CameraStackReset.disableCameraHardware { pid in
-            processController.forceKill(pid: pid)
-        }
+        let controller = processController
+        let shouldEscalate = preferAdminIfNeeded
 
-        // Re-check quickly; bounce again once if hardware is still claimed.
-        monitor.refresh()
-        if monitor.isCameraOn {
-            _ = CameraStackReset.disableCameraHardware { pid in
-                processController.forceKill(pid: pid)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            let killFn: (pid_t) -> Bool = { pid in
+                controller.forceKill(pid: pid)
             }
-            monitor.refresh()
-        }
 
-        let system = AppIdentity(bundleID: "com.maccam.camera", processName: "Camera", displayName: "Camera")
-        if now >= notifyCooldownUntil {
-            notifyCooldownUntil = now.addingTimeInterval(10)
-            activityLog.record(ActivityEvent(app: system, action: .blocked, detail: reason))
-            notify(
-                title: "Camera disabled",
-                body: "MacCam turned the camera off. Apps stay open — unlock to use the camera again."
+            // Pass 1: user-level (no password) on a background thread.
+            await Task.detached(priority: .userInitiated) {
+                _ = CameraStackReset.disableCameraHardware(using: killFn, allowAdminEscalation: false)
+            }.value
+
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            self.monitor.refresh()
+
+            var usedAdmin = false
+            if self.monitor.isCameraOn && shouldEscalate {
+                self.adminAttemptedThisLockSession = true
+                self.status = .needsAdmin
+                // Pass 2: macOS password dialog — camera daemons are usually root-owned.
+                await Task.detached(priority: .userInitiated) {
+                    _ = CameraStackReset.disableCameraHardware(using: killFn, allowAdminEscalation: true)
+                }.value
+                usedAdmin = true
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                self.monitor.refresh()
+            }
+
+            let off = !self.monitor.isCameraOn
+            self.needsAdminAuthorization = !off && self.mode == .locked
+            self.isBusyDisabling = false
+
+            let system = AppIdentity(
+                bundleID: "com.maccam.camera",
+                processName: "Camera",
+                displayName: "Camera"
             )
-        }
-
-        scheduleStatusRefresh()
-    }
-
-    private func scheduleStatusRefresh() {
-        statusClearWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            Task { @MainActor in
-                self?.monitor.refresh()
-                self?.refreshStatus()
-                // If something turned the camera back on, disable again immediately.
-                if self?.mode == .locked, self?.monitor.isCameraOn == true {
-                    self?.disableCameraNow(reason: "Camera re-enabled by system", force: true)
+            if Date() >= self.notifyCooldownUntil {
+                self.notifyCooldownUntil = Date().addingTimeInterval(12)
+                let detail = off
+                    ? (usedAdmin ? "Disabled (admin)" : "Disabled")
+                    : "Still on — admin required"
+                self.activityLog.record(ActivityEvent(app: system, action: .blocked, detail: detail))
+                if off {
+                    self.notify(
+                        title: "Camera disabled",
+                        body: "The camera LED should be off. Apps stay open — unlock to use the camera."
+                    )
+                } else {
+                    self.notify(
+                        title: "Password needed",
+                        body: "Click “Authorize to turn LED off” in MacCam and enter your Mac password."
+                    )
                 }
             }
+            self.refreshStatus()
         }
-        statusClearWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
     }
 
     private func refreshStatus() {
         switch mode {
         case .locked:
-            if monitor.isCameraOn {
+            if isBusyDisabling {
                 iconState = .alert
                 status = .disabling
+            } else if monitor.isCameraOn {
+                iconState = .alert
+                status = needsAdminAuthorization ? .needsAdmin : .disabling
             } else {
                 iconState = .locked
                 status = .protected
+                needsAdminAuthorization = false
             }
         case .unlocked:
             iconState = .unlocked
+            needsAdminAuthorization = false
             if monitor.isCameraOn, let candidate = identifier.identifyLikelyCameraUser() {
                 status = .cameraActive(appName: candidate.app.displayName)
             } else {

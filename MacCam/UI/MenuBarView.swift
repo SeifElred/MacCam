@@ -51,6 +51,9 @@ struct MenuBarView: View {
             header
             lockControl
             statusChip
+            if guardService.needsAdminAuthorization && isLocked {
+                authorizeButton
+            }
             if let latest = activityLog.recent(1).first {
                 latestLine(latest)
             }
@@ -144,9 +147,36 @@ struct MenuBarView: View {
         switch guardService.status {
         case .protected: return DesignTokens.mint
         case .unlocked: return DesignTokens.textSecondary
-        case .disabling: return DesignTokens.alert
+        case .disabling, .needsAdmin: return DesignTokens.alert
         case .cameraActive: return DesignTokens.warning
         }
+    }
+
+    private var authorizeButton: some View {
+        Button {
+            guardService.authorizeAdminDisable()
+        } label: {
+            HStack {
+                Image(systemName: "key.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(guardService.isBusyDisabling ? "Waiting for password…" : "Authorize to turn LED off")
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(DesignTokens.textPrimary)
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(DesignTokens.alert.opacity(0.18))
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignTokens.controlRadius, style: .continuous)
+                    .strokeBorder(DesignTokens.alert.opacity(0.45), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.controlRadius, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(guardService.isBusyDisabling)
     }
 
     private func latestLine(_ event: ActivityEvent) -> some View {

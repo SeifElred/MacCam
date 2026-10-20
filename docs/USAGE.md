@@ -42,6 +42,7 @@ If macOS says the app can’t be opened:
 - Camera system services are bounced whenever the camera turns on
 - Your apps **keep running** — their camera preview just fails / shows no device
 - Green LED should go off because nothing holds the sensor
+- Camera daemons are often **root-owned**. If the LED stays on, click **Authorize to turn LED off** and enter your Mac password once (macOS admin dialog).
 - **Allow list**: if an allow-listed app is the likely camera user, MacCam won’t disable (optional exception)
 
 ### Allow / Block lists
@@ -78,8 +79,8 @@ Menu → **Quit MacCam**, or **⌘Q**. After quitting, the camera works normally
 - macOS has no public API for “revoke camera for all apps”; MacCam disables the camera **stack** instead
 - Some camera daemons may need a moment to release; MacCam retries while locked
 - If Continuity Camera (iPhone) is active, disconnect the phone or unlock MacCam
-- If the LED stays on after lock, run once:  
-  `sudo killall -9 appleh13camerad VDCAssistant AppleCameraAssistant UVCAssistant cameracaptured`
+- If the LED stays on: use **Authorize to turn LED off** in the menu, or run:  
+  `sudo killall -9 appleh13camerad VDCAssistant AppleCameraAssistant UVCAssistant cameracaptured ContinuityCaptureAgent`
 
 ## Build with Xcode
 
