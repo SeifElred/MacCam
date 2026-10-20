@@ -5,7 +5,7 @@ enum GuardEnforcementAction: Equatable {
     case ignore
     /// Leave camera on (allow-listed session).
     case allowSilently
-    /// Disable camera hardware (apps stay open; stream fails; LED can turn off).
+    /// Disable camera via OS ban + soft kill (apps stay open; stream fails). LED is ISP-tied.
     case disableHardware
 }
 

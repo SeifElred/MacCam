@@ -8,74 +8,61 @@ struct SettingsSection: View {
     var onOpenBlocklist: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            toggleRow(
-                title: "Launch at Login",
-                systemImage: "power",
-                isOn: Binding(
+        VStack(spacing: DesignTokens.moduleGap) {
+            CCModule {
+                ccToggle("Open at Login", isOn: Binding(
                     get: { loginItems.isEnabled },
                     set: { loginItems.setEnabled($0) }
-                )
-            )
-
-            if let error = loginItems.lastError, !error.isEmpty {
-                Text(error)
-                    .font(.system(size: 10))
-                    .foregroundStyle(DesignTokens.warning)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                ))
+                if let error = loginItems.lastError, !error.isEmpty {
+                    Text(error)
+                        .font(.system(size: 11))
+                        .foregroundStyle(DesignTokens.warning)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                }
+                CCDivider()
+                ccToggle("Notify on Attempt", isOn: $guardService.notifyOnAttempt)
             }
 
-            toggleRow(
-                title: "Notify on attempt",
-                systemImage: "bell",
-                isOn: $guardService.notifyOnAttempt
-            )
-
-            HStack(spacing: 8) {
-                listChip("Allow", count: policy.allowlist.count, action: onOpenAllowlist)
-                listChip("Block", count: policy.blocklist.count, action: onOpenBlocklist)
+            CCModule {
+                ccLink("Allow List", trailing: "\(policy.allowlist.count)", action: onOpenAllowlist)
+                CCDivider()
+                ccLink("Block List", trailing: "\(policy.blocklist.count)", action: onOpenBlocklist)
             }
         }
     }
 
-    private func toggleRow(title: String, systemImage: String, isOn: Binding<Bool>) -> some View {
+    private func ccToggle(_ title: String, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
-            Label {
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(DesignTokens.textPrimary)
-                    .lineLimit(1)
-            } icon: {
-                Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(DesignTokens.mint)
-                    .frame(width: 16)
-            }
+            Text(title)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(DesignTokens.textPrimary)
         }
         .toggleStyle(.switch)
-        .tint(DesignTokens.mint)
+        .controlSize(.small)
+        .tint(DesignTokens.accent)
+        .padding(.horizontal, 12)
         .frame(height: DesignTokens.rowHeight)
-        .padding(.horizontal, 10)
-        .background(GlassRowBackground())
     }
 
-    private func listChip(_ title: String, count: Int, action: @escaping () -> Void) -> some View {
+    private func ccLink(_ title: String, trailing: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack {
+            HStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .lineLimit(1)
+                    .font(.system(size: 13))
+                    .foregroundStyle(DesignTokens.textPrimary)
                 Spacer(minLength: 0)
-                Text("\(count)")
-                    .font(.system(size: 11, weight: .bold).monospacedDigit())
+                Text(trailing)
+                    .font(.system(size: 13).monospacedDigit())
                     .foregroundStyle(DesignTokens.textSecondary)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(DesignTokens.textSecondary.opacity(0.55))
             }
-            .foregroundStyle(DesignTokens.textPrimary)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 12)
             .frame(height: DesignTokens.rowHeight)
-            .frame(maxWidth: .infinity)
-            .background(GlassRowBackground())
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

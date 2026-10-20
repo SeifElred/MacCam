@@ -44,7 +44,7 @@
 	<key>PayloadRemovalDisallowed</key>
 	<false/>
 	<key>PayloadScope</key>
-	<string>System</string>
+	<string>User</string>
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
@@ -52,7 +52,7 @@
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 	<key>PayloadDescription</key>
-	<string>System camera ban: apps cannot use the camera and CoreMediaIO device access is denied. Remove with scripts/remove-camera-ban.sh when you need FaceTime.</string>
+	<string>User camera ban. Unlock / Use Camera removes it without admin password. Re-lock: Install this profile once when prompted.</string>
 	<key>PayloadOrganization</key>
 	<string>MacCam</string>
 </dict>

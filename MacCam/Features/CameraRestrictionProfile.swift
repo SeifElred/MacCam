@@ -4,7 +4,8 @@ import Foundation
 /// Combines:
 /// 1) allowCamera=false (app restriction / NIST STIG approach)
 /// 2) Device Access Allowed=false (CoreMediaIO — classic iSight disabler approach)
-/// LED is hardwired to camera power; this is what keeps the sensor unpowered when idle.
+/// Blocks apps from opening the camera. LED is hardwired to ISP power — ban alone
+/// does not guarantee the physical LED is dark if something still wakes appleh13camerad.
 enum CameraRestrictionProfile {
     static let payloadIdentifier = "com.maccam.camera.disable"
     static let restrictionsIdentifier = "com.maccam.camera.disable.restrictions"
@@ -63,7 +64,7 @@ enum CameraRestrictionProfile {
         	<key>PayloadRemovalDisallowed</key>
         	<false/>
         	<key>PayloadScope</key>
-        	<string>System</string>
+        	<string>User</string>
         	<key>PayloadType</key>
         	<string>Configuration</string>
         	<key>PayloadUUID</key>
@@ -71,7 +72,7 @@ enum CameraRestrictionProfile {
         	<key>PayloadVersion</key>
         	<integer>1</integer>
         	<key>PayloadDescription</key>
-        	<string>System camera ban: apps cannot use the camera and CoreMediaIO device access is denied. Remove this profile (or Unlock MacCam) when you need FaceTime/Photo Booth.</string>
+        	<string>Camera ban for this user. Unlock / Use Camera removes it without an admin password. Re-lock asks you to Install once.</string>
         	<key>PayloadOrganization</key>
         	<string>MacCam</string>
         </dict>
@@ -138,8 +139,26 @@ enum CameraRestrictionProfile {
     }
 
     private static func readAllowCameraDisabled() -> Bool {
+        // Prefer MacCam helper state via prefs the root helper toggles (no profile cycle).
+        let paths = [
+            "/Library/Preferences/com.apple.applicationaccess.plist",
+            "/Library/Preferences/com.apple.coremediaio.support.plist",
+            "/Library/Managed Preferences/com.apple.applicationaccess.plist",
+            NSHomeDirectory() + "/Library/Managed Preferences/com.apple.applicationaccess.plist"
+        ]
+        for path in paths {
+            if let dict = NSDictionary(contentsOfFile: path) as? [String: Any] {
+                if allowCameraIsDisabled(dict["allowCamera"]) { return true }
+                if let cmio = dict["Device Access Allowed"] as? Bool, cmio == false { return true }
+                if let cmio = dict["Device Access Allowed"] as? NSNumber, cmio.boolValue == false { return true }
+            }
+        }
         let suite = UserDefaults(suiteName: "com.apple.applicationaccess")
-        guard let raw = suite?.object(forKey: "allowCamera") else { return false }
+        return allowCameraIsDisabled(suite?.object(forKey: "allowCamera"))
+    }
+
+    private static func allowCameraIsDisabled(_ raw: Any?) -> Bool {
+        guard let raw else { return false }
         if let flag = raw as? Bool { return flag == false }
         if let number = raw as? NSNumber { return number.boolValue == false }
         if let text = raw as? String { return text == "0" || text.lowercased() == "false" }

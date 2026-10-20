@@ -33,5 +33,8 @@ open "x-apple.systempreferences:com.apple.Profiles-Settings.extension" 2>/dev/nu
 echo "Waiting for you to click Install…"
 echo "After Install, run:"
 echo "  profiles list -all | grep -i maccam"
-echo "  sudo killall -9 appleh13camerad"
-echo "If LED was already stuck green: Restart once, leave the ban installed."
+echo
+echo "Success = Photo Booth / FaceTime see no camera."
+echo "LED is ISP-tied (not bit-bangable with SIP on)."
+echo "Do NOT loop-kill appleh13camerad — that re-powers the ISP."
+echo "If LED stays green after a restart with the ban on: cover / Apple Care."

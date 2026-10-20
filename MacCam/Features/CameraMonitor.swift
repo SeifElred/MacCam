@@ -3,9 +3,16 @@ import Foundation
 
 /// Polls CoreMediaIO for camera hardware activity.
 /// Reading `kCMIODevicePropertyDeviceIsRunningSomewhere` does not require Camera TCC permission.
+///
+/// Important (M-series / appleh13camerad): any CMIO device enumeration talks to the ISP
+/// extension and calls `ISP_PowerOnCamera`, resetting a ~4s DeferredPowerOff timer.
+/// Polling while Privacy Lock + OS ban are active therefore keeps the green LED on.
+/// Suspend hardware polling whenever the camera ban is active.
 final class CameraMonitor: ObservableObject {
     @Published private(set) var isCameraOn: Bool = false
     @Published private(set) var lastChecked: Date = .distantPast
+    /// When true, skip CoreMediaIO entirely so MacCam does not keep the ISP warm.
+    @Published private(set) var hardwarePollingSuspended: Bool = false
 
     private var timer: Timer?
     private var pollInterval: TimeInterval
@@ -18,6 +25,12 @@ final class CameraMonitor: ObservableObject {
 
     func start() {
         stop()
+        // Do not CMIO-refresh while suspended — that ConnectClient wakes the ISP/LED.
+        guard !hardwarePollingSuspended else {
+            lastChecked = Date()
+            isCameraOn = false
+            return
+        }
         refresh()
         let timer = Timer(timeInterval: pollInterval, repeats: true) { [weak self] _ in
             self?.refresh()
@@ -29,7 +42,21 @@ final class CameraMonitor: ObservableObject {
     func setPollInterval(_ interval: TimeInterval) {
         guard abs(interval - pollInterval) > 0.001 else { return }
         pollInterval = interval
-        if timer != nil {
+        if timer != nil || (!hardwarePollingSuspended && lastChecked != .distantPast) {
+            start()
+        }
+    }
+
+    /// Suspend/resume CMIO polling. While suspended, reports sensor off (ban handles privacy).
+    func setHardwarePollingSuspended(_ suspended: Bool) {
+        guard suspended != hardwarePollingSuspended else { return }
+        hardwarePollingSuspended = suspended
+        if suspended {
+            timer?.invalidate()
+            timer = nil
+            if isCameraOn { isCameraOn = false }
+            lastChecked = Date()
+        } else {
             start()
         }
     }
@@ -40,6 +67,11 @@ final class CameraMonitor: ObservableObject {
     }
 
     func refresh() {
+        if hardwarePollingSuspended {
+            lastChecked = Date()
+            if isCameraOn { isCameraOn = false }
+            return
+        }
         let active = Self.isAnyCameraRunning(includeExternal: includeExternal)
         lastChecked = Date()
         if active != isCameraOn {
@@ -50,7 +82,7 @@ final class CameraMonitor: ObservableObject {
     /// Pure helper used by tests and production.
     static func isAnyCameraRunning(includeExternal: Bool = true) -> Bool {
         for deviceID in allDeviceIDs() {
-            // Always trust built-in FaceTime camera for LED state.
+            // Prefer built-in FaceTime camera for “running somewhere” (ISP activity).
             if isBuiltIn(deviceID) {
                 if isRunningSomewhere(deviceID) { return true }
                 continue

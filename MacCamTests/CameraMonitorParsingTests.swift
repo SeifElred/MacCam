@@ -20,4 +20,15 @@ final class CameraMonitorParsingTests: XCTestCase {
         _ = CameraMonitor.isAnyCameraRunning(includeExternal: true)
         _ = CameraMonitor.isAnyCameraRunning(includeExternal: false)
     }
+
+    func testHardwarePollingSuspendReportsOffWithoutCrashing() {
+        let monitor = CameraMonitor(pollInterval: 30)
+        monitor.setHardwarePollingSuspended(true)
+        XCTAssertTrue(monitor.hardwarePollingSuspended)
+        monitor.refresh()
+        XCTAssertFalse(monitor.isCameraOn)
+        monitor.setHardwarePollingSuspended(false)
+        XCTAssertFalse(monitor.hardwarePollingSuspended)
+        monitor.stop()
+    }
 }

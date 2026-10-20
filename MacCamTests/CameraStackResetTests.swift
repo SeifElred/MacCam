@@ -3,9 +3,11 @@ import XCTest
 
 final class CameraStackResetTests: XCTestCase {
     func testMatchesKnownDaemonsIncludingM1() {
-        XCTAssertTrue(CameraStackReset.matchesDaemon("appleh13camerad"))
+        // Never soft-kill appleh13camerad — respawn powers the ISP / green LED.
+        XCTAssertFalse(CameraStackReset.matchesDaemon("appleh13camerad"))
+        XCTAssertFalse(CameraDisableHelper.daemonNames.contains("appleh13camerad"))
         XCTAssertTrue(CameraStackReset.matchesDaemon("VDCAssistant"))
-        XCTAssertTrue(CameraDisableHelper.daemonNames.contains("appleh13camerad"))
+        XCTAssertFalse(CameraStackReset.matchesDaemon("ContinuityCaptureAgent"))
         XCTAssertFalse(CameraStackReset.matchesDaemon("Finder"))
         XCTAssertFalse(CameraStackReset.matchesDaemon("zoom.us"))
     }

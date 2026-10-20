@@ -33,10 +33,12 @@ SOURCES=(
   MacCam/Features/CameraRestrictionProfile.swift
   MacCam/Features/CameraStackReset.swift
   MacCam/Features/GuardDecisionEngine.swift
+  MacCam/Features/ISPPowerProbe.swift
   MacCam/Features/LoginItemService.swift
   MacCam/Features/PolicyStore.swift
   MacCam/Features/ProcessEnumerator.swift
   MacCam/Features/ProcessIdentifier.swift
+  MacCam/UI/AccessPrompt.swift
   MacCam/UI/ActivityRow.swift
   MacCam/UI/DesignTokens.swift
   MacCam/UI/MenuBarView.swift
@@ -76,7 +78,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<key>CFBundleExecutable</key>
 	<string>MacCam</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.maccam.app</string>
+	<string>app.maccam.statusbar</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -93,6 +95,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
+	<key>NSSupportsSuddenTermination</key>
+	<false/>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 MacCam. Local privacy tool.</string>
 	<key>NSPrincipalClass</key>
