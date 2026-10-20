@@ -1,0 +1,152 @@
+import CoreMediaIO
+import Foundation
+
+/// Polls CoreMediaIO for camera hardware activity.
+/// Reading `kCMIODevicePropertyDeviceIsRunningSomewhere` does not require Camera TCC permission.
+final class CameraMonitor: ObservableObject {
+    @Published private(set) var isCameraOn: Bool = false
+    @Published private(set) var lastChecked: Date = .distantPast
+
+    private var timer: Timer?
+    private let pollInterval: TimeInterval
+    private let includeExternal: Bool
+
+    init(pollInterval: TimeInterval = 0.25, includeExternal: Bool = true) {
+        self.pollInterval = pollInterval
+        self.includeExternal = includeExternal
+    }
+
+    func start() {
+        stop()
+        refresh()
+        let timer = Timer(timeInterval: pollInterval, repeats: true) { [weak self] _ in
+            self?.refresh()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    func refresh() {
+        let active = Self.isAnyCameraRunning(includeExternal: includeExternal)
+        lastChecked = Date()
+        if active != isCameraOn {
+            isCameraOn = active
+        }
+    }
+
+    /// Pure helper used by tests and production.
+    static func isAnyCameraRunning(includeExternal: Bool = true) -> Bool {
+        for deviceID in allDeviceIDs() {
+            if !includeExternal && !isBuiltIn(deviceID) { continue }
+            // Skip obvious virtual/DAL-only devices when we can detect them.
+            if isLikelyVirtualOnly(deviceID) { continue }
+            if isRunningSomewhere(deviceID) {
+                return true
+            }
+        }
+        return false
+    }
+
+    // MARK: - CoreMediaIO
+
+    static func allDeviceIDs() -> [CMIOObjectID] {
+        var address = CMIOObjectPropertyAddress(
+            mSelector: CMIOObjectPropertySelector(kCMIOHardwarePropertyDevices),
+            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
+            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain)
+        )
+
+        var dataSize: UInt32 = 0
+        guard CMIOObjectGetPropertyDataSize(CMIOObjectID(kCMIOObjectSystemObject), &address, 0, nil, &dataSize) == 0,
+              dataSize > 0 else {
+            return []
+        }
+
+        let count = Int(dataSize) / MemoryLayout<CMIOObjectID>.size
+        var devices = [CMIOObjectID](repeating: 0, count: count)
+        var dataUsed: UInt32 = 0
+        let status = CMIOObjectGetPropertyData(
+            CMIOObjectID(kCMIOObjectSystemObject),
+            &address,
+            0,
+            nil,
+            dataSize,
+            &dataUsed,
+            &devices
+        )
+        return status == 0 ? devices : []
+    }
+
+    static func isRunningSomewhere(_ deviceID: CMIOObjectID) -> Bool {
+        var address = CMIOObjectPropertyAddress(
+            mSelector: CMIOObjectPropertySelector(kCMIODevicePropertyDeviceIsRunningSomewhere),
+            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeWildcard),
+            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementWildcard)
+        )
+
+        var dataSize: UInt32 = 0
+        guard CMIOObjectGetPropertyDataSize(deviceID, &address, 0, nil, &dataSize) == 0 else {
+            return false
+        }
+
+        var isRunning: UInt32 = 0
+        var dataUsed: UInt32 = 0
+        let status = CMIOObjectGetPropertyData(deviceID, &address, 0, nil, dataSize, &dataUsed, &isRunning)
+        return status == 0 && isRunning != 0
+    }
+
+    static func isBuiltIn(_ deviceID: CMIOObjectID) -> Bool {
+        let transport = transportType(deviceID)
+        return transport == kIOAudioDeviceTransportTypeBuiltIn
+            || transport == kCMIODeviceTransportTypeBuiltIn
+    }
+
+    /// Virtual camera plugins often expose latency and have no physical transport.
+    static func isLikelyVirtualOnly(_ deviceID: CMIOObjectID) -> Bool {
+        var latencyAddress = CMIOObjectPropertyAddress(
+            mSelector: CMIOObjectPropertySelector(kCMIODevicePropertyLatency),
+            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeWildcard),
+            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementWildcard)
+        )
+        var dataSize: UInt32 = 0
+        let hasLatency = CMIOObjectGetPropertyDataSize(deviceID, &latencyAddress, 0, nil, &dataSize) == 0
+        guard hasLatency else { return false }
+
+        let transport = transportType(deviceID)
+        let physicalTransports: Set<UInt32> = [
+            kIOAudioDeviceTransportTypeBuiltIn,
+            kCMIODeviceTransportTypeBuiltIn,
+            kIOAudioDeviceTransportTypeUSB,
+            kIOAudioDeviceTransportTypePCI,
+            kIOAudioDeviceTransportTypeBluetooth,
+            kIOAudioDeviceTransportTypeFireWire
+        ]
+        return !physicalTransports.contains(transport)
+    }
+
+    static func transportType(_ deviceID: CMIOObjectID) -> UInt32 {
+        var address = CMIOObjectPropertyAddress(
+            mSelector: CMIOObjectPropertySelector(kCMIODevicePropertyTransportType),
+            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
+            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain)
+        )
+        var transport: UInt32 = 0
+        var dataSize = UInt32(MemoryLayout<UInt32>.size)
+        var dataUsed: UInt32 = 0
+        let status = CMIOObjectGetPropertyData(deviceID, &address, 0, nil, dataSize, &dataUsed, &transport)
+        return status == 0 ? transport : 0
+    }
+}
+
+// Fallback constants if headers differ across SDKs.
+private let kCMIODeviceTransportTypeBuiltIn: UInt32 = 0x626C746E // 'bltn'
+private let kIOAudioDeviceTransportTypeBuiltIn: UInt32 = 0x626C746E
+private let kIOAudioDeviceTransportTypeUSB: UInt32 = 0x75736220 // 'usb '
+private let kIOAudioDeviceTransportTypePCI: UInt32 = 0x70636920 // 'pci '
+private let kIOAudioDeviceTransportTypeBluetooth: UInt32 = 0x626C7565 // 'blue'
+private let kIOAudioDeviceTransportTypeFireWire: UInt32 = 0x66697265 // 'fire'
