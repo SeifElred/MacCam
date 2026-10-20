@@ -1,6 +1,6 @@
 import Foundation
 
-/// Facade used by CameraGuard — prefers the installed root helper (100% path on M1 Pro).
+/// Facade for camera disable — prefers OS restriction profile + daemon bootout.
 enum CameraStackReset {
     static var daemonNames: [String] { CameraDisableHelper.daemonNames }
 
@@ -15,7 +15,6 @@ enum CameraStackReset {
         case adminOnly
     }
 
-    /// Disable camera hardware. Does not quit Zoom/Chrome/FaceTime.
     @discardableResult
     static func disableCameraHardware(
         using kill: (pid_t) -> Bool,
@@ -25,15 +24,15 @@ enum CameraStackReset {
 
         switch strategy {
         case .helperOnly:
-            return CameraDisableHelper.requestDisable()
+            return CameraDisableHelper.requestLock()
         case .helperThenAdmin:
             if CameraDisableHelper.isInstalled {
-                _ = CameraDisableHelper.requestDisable()
+                _ = CameraDisableHelper.requestLock()
                 return true
             }
-            return CameraDisableHelper.privilegedKillDaemons()
+            return CameraDisableHelper.privilegedLockFull()
         case .adminOnly:
-            return CameraDisableHelper.privilegedKillDaemons()
+            return CameraDisableHelper.privilegedLockFull()
         }
     }
 }

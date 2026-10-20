@@ -1,12 +1,14 @@
 import Foundation
 
-/// One-time root LaunchDaemon so MacCam can turn the M1/M-series camera (and LED) off
-/// without force-quitting user apps. Password is required only for install (and rare fallbacks).
+/// Root LaunchDaemon helper: OS camera restriction profile + appleh13camerad bootout.
+/// Does not force-quit user apps. One-time password to install the helper.
 enum CameraDisableHelper {
     static let label = "com.maccam.cameradisable"
     static let supportDir = "/Library/Application Support/MacCam"
     static let scriptPath = supportDir + "/disable-camera.sh"
     static let triggerPath = supportDir + "/trigger"
+    static let commandPath = supportDir + "/command"
+    static let profilePath = supportDir + "/disable-camera.mobileconfig"
     static let plistPath = "/Library/LaunchDaemons/\(label).plist"
 
     /// M1 Pro uses appleh13camerad for the built-in FaceTime camera.
@@ -22,9 +24,9 @@ enum CameraDisableHelper {
     static var terminalFixCommand: String {
         let names = daemonNames.joined(separator: " ")
         return [
+            "sudo /usr/bin/profiles install -type configuration -path '\(profilePath)'",
             "sudo /usr/bin/killall -9 \(names)",
-            "sleep 0.2",
-            "sudo /usr/bin/killall -9 \(names)",
+            "sudo /bin/launchctl bootout system/com.apple.appleh13camerad",
             "sleep 0.2",
             "sudo /usr/bin/killall -9 \(names)"
         ].joined(separator: "; ")
@@ -35,20 +37,26 @@ enum CameraDisableHelper {
             && FileManager.default.fileExists(atPath: plistPath)
     }
 
-    /// Helper files exist and trigger is writable (ready for password-free disables).
     static var isHealthy: Bool {
         guard isInstalled else { return false }
         return FileManager.default.isWritableFile(atPath: triggerPath)
             || FileManager.default.isWritableFile(atPath: supportDir)
     }
 
-    /// Installs root helper (one macOS password dialog) and runs a multi-pulse clear immediately.
+    static var isRestrictionActive: Bool {
+        CameraRestrictionProfile.isActive
+    }
+
+    /// Installs root helper + embeds mobileconfig (one password dialog).
     @discardableResult
     static func install() -> Bool {
         let script = disableScriptContents()
         let plist = launchDaemonPlist()
+        let profile = CameraRestrictionProfile.profileXML
+
         let scriptB64 = Data(script.utf8).base64EncodedString()
         let plistB64 = Data(plist.utf8).base64EncodedString()
+        let profileB64 = Data(profile.utf8).base64EncodedString()
 
         let shell = [
             "mkdir -p '\(supportDir)'",
@@ -56,18 +64,23 @@ enum CameraDisableHelper {
             "chmod 755 '\(scriptPath)'",
             "echo '\(plistB64)' | /usr/bin/base64 -D > '\(plistPath)'",
             "chmod 644 '\(plistPath)'",
-            "chown root:wheel '\(scriptPath)' '\(plistPath)'",
+            "echo '\(profileB64)' | /usr/bin/base64 -D > '\(profilePath)'",
+            "chmod 644 '\(profilePath)'",
+            "chown root:wheel '\(scriptPath)' '\(plistPath)' '\(profilePath)'",
             "touch '\(triggerPath)'",
             "chmod 666 '\(triggerPath)'",
+            "touch '\(commandPath)'",
+            "chmod 666 '\(commandPath)'",
             "/bin/launchctl bootout system/\(label) 2>/dev/null || true",
             "/bin/launchctl unload '\(plistPath)' 2>/dev/null || true",
             "/bin/launchctl bootstrap system '\(plistPath)' 2>/dev/null || true",
             "/bin/launchctl load -w '\(plistPath)' 2>/dev/null || true",
             "/bin/launchctl enable system/\(label) 2>/dev/null || true",
-            "/bin/launchctl kickstart -k system/\(label) 2>/dev/null || true",
+            "echo lock > '\(commandPath)'",
             "'\(scriptPath)'",
             "test -f '\(scriptPath)'",
             "test -f '\(plistPath)'",
+            "test -f '\(profilePath)'",
             "exit 0"
         ].joined(separator: "; ")
 
@@ -75,40 +88,60 @@ enum CameraDisableHelper {
         return ok && isInstalled
     }
 
-    /// Ask the root helper to bounce camera services (no password if installed + healthy).
+    /// Lock: install allowCamera=false profile + bootout camera daemon (no user-app quits).
     @discardableResult
-    static func requestDisable() -> Bool {
-        guard isInstalled else { return false }
-
-        let stamp = "\(Date().timeIntervalSince1970)-\(UUID().uuidString)\n"
-        do {
-            try stamp.write(toFile: triggerPath, atomically: true, encoding: .utf8)
-        } catch {
-            // Trigger not writable — run script with admin once.
-            return runAdminShell("'\(scriptPath)'; exit 0")
-        }
-        _ = runProcess("/bin/launchctl", arguments: ["kickstart", "-k", "system/\(label)"])
-        // Direct root script execution isn't possible without admin; WatchPaths + kickstart handle it.
-        // Also try executing via launchctl as user may have rights on some systems:
-        _ = runProcess("/bin/bash", arguments: [scriptPath])
-        return true
+    static func requestLock() -> Bool {
+        writeCommand("lock")
+        return fireHelper()
     }
 
-    /// One password: multi-pulse kill loop (reduces “camera grabs again” races).
+    /// Unlock: remove restriction profile + restore appleh13camerad.
     @discardableResult
-    static func privilegedKillDaemons() -> Bool {
+    static func requestUnlock() -> Bool {
+        writeCommand("unlock")
+        return fireHelper()
+    }
+
+    /// Backward-compatible alias used by older call sites.
+    @discardableResult
+    static func requestDisable() -> Bool {
+        requestLock()
+    }
+
+    /// Admin fallback: multi-pulse kill + bootout + profile install in one password.
+    @discardableResult
+    static func privilegedLockFull() -> Bool {
         let names = daemonNames.map { "\"\($0)\"" }.joined(separator: " ")
+        let profileB64 = Data(CameraRestrictionProfile.profileXML.utf8).base64EncodedString()
         let shell = [
-            "for i in 1 2 3 4 5 6; do",
-            "/usr/bin/killall -9 \(names) 2>/dev/null || true;",
-            "/bin/sleep 0.12;",
-            "done",
+            "mkdir -p '\(supportDir)'",
+            "echo '\(profileB64)' | /usr/bin/base64 -D > '\(profilePath)'",
+            "chmod 644 '\(profilePath)'",
+            "/usr/bin/profiles install -type configuration -path '\(profilePath)' 2>/dev/null || true",
+            "for i in 1 2 3 4 5 6; do /usr/bin/killall -9 \(names) 2>/dev/null || true; /bin/sleep 0.12; done",
+            "/bin/launchctl bootout system/com.apple.appleh13camerad 2>/dev/null || true",
+            "/bin/launchctl disable system/com.apple.appleh13camerad 2>/dev/null || true",
             "exit 0"
-        ].joined(separator: " ")
+        ].joined(separator: "; ")
         return runAdminShell(shell)
     }
 
-    /// Unprivileged best-effort (usually fails on root daemons — still try).
+    @discardableResult
+    static func privilegedUnlockFull() -> Bool {
+        let shell = [
+            "/usr/bin/profiles remove -identifier=\(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true",
+            "/bin/launchctl enable system/com.apple.appleh13camerad 2>/dev/null || true",
+            "/bin/launchctl kickstart -k system/com.apple.appleh13camerad 2>/dev/null || true",
+            "exit 0"
+        ].joined(separator: "; ")
+        return runAdminShell(shell)
+    }
+
+    @discardableResult
+    static func privilegedKillDaemons() -> Bool {
+        privilegedLockFull()
+    }
+
     static func unprivilegedKillDaemons(using kill: (pid_t) -> Bool) {
         for process in ProcessEnumerator.allProcesses() {
             let lower = process.name.lowercased()
@@ -121,7 +154,21 @@ enum CameraDisableHelper {
         }
     }
 
-    // MARK: - Embedded files
+    // MARK: - Internals
+
+    private static func writeCommand(_ command: String) {
+        try? command.write(toFile: commandPath, atomically: true, encoding: .utf8)
+        let stamp = "\(Date().timeIntervalSince1970)-\(command)\n"
+        try? stamp.write(toFile: triggerPath, atomically: true, encoding: .utf8)
+    }
+
+    @discardableResult
+    private static func fireHelper() -> Bool {
+        guard isInstalled else { return false }
+        _ = runProcess("/bin/launchctl", arguments: ["kickstart", "-k", "system/\(label)"])
+        // WatchPaths also fires from trigger write.
+        return true
+    }
 
     private static func disableScriptContents() -> String {
         let killLines = daemonNames
@@ -129,12 +176,34 @@ enum CameraDisableHelper {
             .joined(separator: "\n")
         return """
         #!/bin/bash
-        # MacCam — disable built-in camera hardware (M1 Pro / Apple Silicon)
-        # Runs as root. Does not quit user apps. Multi-pulse to beat re-acquire races.
+        # MacCam root helper — M1 Pro / Apple Silicon
+        # Commands: lock (default) | unlock
+        # Does NOT quit user apps (Zoom/Chrome/FaceTime stay open).
+        SUPPORT="\(supportDir)"
+        CMD_FILE="$SUPPORT/command"
+        PROFILE="$SUPPORT/disable-camera.mobileconfig"
+        CMD=$(/bin/cat "$CMD_FILE" 2>/dev/null || echo lock)
+
+        if [ "$CMD" = "unlock" ]; then
+          /usr/bin/profiles remove -identifier=\(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true
+          /bin/launchctl enable system/com.apple.appleh13camerad 2>/dev/null || true
+          /bin/launchctl kickstart -k system/com.apple.appleh13camerad 2>/dev/null || true
+          exit 0
+        fi
+
+        # --- LOCK ---
+        if [ -f "$PROFILE" ]; then
+          /usr/bin/profiles install -type configuration -path "$PROFILE" 2>/dev/null || true
+        fi
+
         for i in 1 2 3 4 5 6; do
         \(killLines)
           /bin/sleep 0.12
         done
+
+        # Keep daemon down while locked (do NOT kickstart appleh13camerad here).
+        /bin/launchctl bootout system/com.apple.appleh13camerad 2>/dev/null || true
+        /bin/launchctl disable system/com.apple.appleh13camerad 2>/dev/null || true
         exit 0
         """
     }

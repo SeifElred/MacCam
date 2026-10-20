@@ -13,6 +13,7 @@ enum GuardStatus: Equatable {
     case disabling
     case needsSetup
     case needsAdmin
+    case stuckLED
     case cameraActive(appName: String)
 
     var label: String {
@@ -27,6 +28,8 @@ enum GuardStatus: Equatable {
             return "One-time setup required"
         case .needsAdmin:
             return "Password needed — tap below"
+        case .stuckLED:
+            return "Stuck LED — restart Mac"
         case .cameraActive(let name):
             return "\(name) is using the camera"
         }
@@ -55,10 +58,13 @@ final class CameraGuard: ObservableObject {
     @Published private(set) var status: GuardStatus = .protected
     @Published private(set) var iconState: MenuBarIconState = .locked
     @Published private(set) var helperInstalled: Bool = CameraDisableHelper.isInstalled
+    @Published private(set) var restrictionActive: Bool = false
     @Published private(set) var needsAdminAuthorization: Bool = false
     @Published private(set) var isBusyDisabling: Bool = false
+    @Published private(set) var suggestRestartForStuckLED: Bool = false
     @Published private(set) var lastFailureHint: String = ""
     @Published private(set) var didCopyFixCommand: Bool = false
+    @Published private(set) var lastActionDetail: String = ""
 
     let policy: PolicyStore
     let activityLog: ActivityLog
@@ -75,11 +81,12 @@ final class CameraGuard: ObservableObject {
     private var lastTriggerPulse: Date = .distantPast
     private var holdSuppressUntil: Date = .distantPast
     private var didAutoPromptInstall = false
+    private var consecutiveOffWhileRestricted = 0
     private var tickTimer: Timer?
     private let lockedTick: TimeInterval = 0.10
     private let unlockedTick: TimeInterval = 0.40
-    private let disableCooldown: TimeInterval = 0.25
-    private let maxVerifyAttempts = 16
+    private let disableCooldown: TimeInterval = 0.30
+    private let maxVerifyAttempts = 14
 
     init(
         policy: PolicyStore = PolicyStore(),
@@ -103,6 +110,7 @@ final class CameraGuard: ObservableObject {
         }
         self.notifyOnAttempt = defaults.object(forKey: notifyKey) as? Bool ?? true
         self.helperInstalled = CameraDisableHelper.isInstalled
+        self.restrictionActive = CameraDisableHelper.isRestrictionActive
         refreshStatus()
     }
 
@@ -111,10 +119,10 @@ final class CameraGuard: ObservableObject {
         restartTickTimer()
         requestNotificationPermissionIfNeeded()
         helperInstalled = CameraDisableHelper.isInstalled
+        restrictionActive = CameraDisableHelper.isRestrictionActive
 
         guard mode == .locked else { return }
 
-        // Minimize “forgot to click setup”: prompt install automatically once per launch.
         if !helperInstalled, !didAutoPromptInstall {
             didAutoPromptInstall = true
             installHelperAndDisable()
@@ -133,6 +141,7 @@ final class CameraGuard: ObservableObject {
         mode = locked ? .locked : .unlocked
         if locked {
             needsAdminAuthorization = false
+            suggestRestartForStuckLED = false
             lastFailureHint = ""
             if !helperInstalled {
                 installHelperAndDisable()
@@ -140,47 +149,48 @@ final class CameraGuard: ObservableObject {
                 ensureCameraOff(reason: "Privacy lock on")
             }
         } else {
-            needsAdminAuthorization = false
-            isBusyDisabling = false
-            holdSuppressUntil = .distantPast
-            lastFailureHint = ""
+            Task { @MainActor in
+                await restoreCameraAccess(reason: "Privacy lock off")
+            }
         }
         restartTickTimer()
         refreshStatus()
     }
 
-    /// One-time: install root helper (password once), then force LED off.
     func installHelperAndDisable() {
         guard mode == .locked else { return }
         isBusyDisabling = true
         status = .disabling
         iconState = .alert
         lastFailureHint = ""
+        suggestRestartForStuckLED = false
 
         Task { @MainActor in
+            _ = CameraRestrictionProfile.writeToSupportDirectory()
             let ok = await Task.detached(priority: .userInitiated) {
                 CameraDisableHelper.install()
             }.value
 
             helperInstalled = CameraDisableHelper.isInstalled
             if ok || helperInstalled {
-                await forceDisableUntilOff(reason: "Helper installed", useAdminFallback: true)
+                await forceDisableUntilOff(reason: "Helper + restriction installed", useAdminFallback: true)
             } else {
-                // Install cancelled / blocked — still try a direct admin multi-pulse clear.
                 let cleared = await Task.detached(priority: .userInitiated) {
-                    CameraDisableHelper.privilegedKillDaemons()
+                    CameraDisableHelper.privilegedLockFull()
                 }.value
-                try? await Task.sleep(nanoseconds: 250_000_000)
+                try? await Task.sleep(nanoseconds: 300_000_000)
                 monitor.refresh()
+                restrictionActive = CameraDisableHelper.isRestrictionActive
                 if !monitor.isCameraOn {
                     needsAdminAuthorization = false
                     lastFailureHint = ""
                     beginHoldSuppress()
+                    lastActionDetail = "Locked via admin fallback"
                 } else {
                     needsAdminAuthorization = true
                     lastFailureHint = cleared
-                        ? "Camera still on. Tap again, or copy the Terminal fix."
-                        : "Password cancelled or blocked. Tap again, or copy the Terminal fix."
+                        ? "Still on. Tap again, copy Terminal fix, or restart Mac if LED is stuck."
+                        : "Password cancelled. Tap again to enable protection."
                     status = .needsAdmin
                 }
                 isBusyDisabling = false
@@ -195,7 +205,7 @@ final class CameraGuard: ObservableObject {
             installHelperAndDisable()
         } else {
             Task { @MainActor in
-                await forceDisableUntilOff(reason: "Manual clear", useAdminFallback: true)
+                await forceDisableUntilOff(reason: "Manual lock", useAdminFallback: true)
             }
         }
     }
@@ -208,6 +218,17 @@ final class CameraGuard: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             self?.didCopyFixCommand = false
         }
+    }
+
+    func requestRestartMac() {
+        // Opens restart confirmation via AppleScript (user still confirms).
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = [
+            "-e",
+            "tell application \"System Events\" to restart"
+        ]
+        try? process.run()
     }
 
     // MARK: - Internals
@@ -232,12 +253,22 @@ final class CameraGuard: ObservableObject {
     private func tick() {
         monitor.refresh()
         helperInstalled = CameraDisableHelper.isInstalled
+        restrictionActive = CameraDisableHelper.isRestrictionActive
 
-        guard mode == .locked else { return }
+        if mode == .unlocked {
+            refreshStatus()
+            return
+        }
 
-        // After a successful clear, keep pulsing briefly so apps can't instantly re-grab.
         if Date() < holdSuppressUntil, helperInstalled {
-            pulseHelperIfDue()
+            pulseLockIfDue()
+        }
+
+        // Stuck LED heuristic: restriction on, CMIO off, but we previously failed visually.
+        if restrictionActive, !monitor.isCameraOn {
+            consecutiveOffWhileRestricted += 1
+        } else {
+            consecutiveOffWhileRestricted = 0
         }
 
         enforceDisabledCamera()
@@ -252,9 +283,8 @@ final class CameraGuard: ObservableObject {
             return policy.decision(for: candidate.app) == .allowlisted
         }()
 
-        // Fast path: camera on → pulse helper every 150ms without waiting for full async job.
-        if monitor.isCameraOn, helperInstalled, allowlistedLikely == false {
-            pulseHelperIfDue()
+        if monitor.isCameraOn, helperInstalled, !allowlistedLikely {
+            pulseLockIfDue()
         }
 
         let action = GuardDecisionEngine.action(
@@ -271,19 +301,19 @@ final class CameraGuard: ObservableObject {
         }
     }
 
-    private func pulseHelperIfDue() {
+    private func pulseLockIfDue() {
         let now = Date()
-        guard now.timeIntervalSince(lastTriggerPulse) >= 0.15 else { return }
+        guard now.timeIntervalSince(lastTriggerPulse) >= 0.18 else { return }
         lastTriggerPulse = now
-        _ = CameraDisableHelper.requestDisable()
+        _ = CameraDisableHelper.requestLock()
         CameraDisableHelper.unprivilegedKillDaemons { [processController] pid in
             processController.forceKill(pid: pid)
         }
     }
 
     private func ensureCameraOff(reason: String) {
-        let now = Date()
         if isBusyDisabling { return }
+        let now = Date()
         if now.timeIntervalSince(lastDisable) < disableCooldown { return }
         lastDisable = now
 
@@ -291,7 +321,6 @@ final class CameraGuard: ObservableObject {
             needsAdminAuthorization = true
             status = .needsSetup
             iconState = .alert
-            // Don't only wait for a click — escalate automatically once.
             if !didAutoPromptInstall {
                 didAutoPromptInstall = true
                 installHelperAndDisable()
@@ -304,11 +333,14 @@ final class CameraGuard: ObservableObject {
         }
     }
 
+    /// Primary: restriction profile. Secondary: bootout/kill. Success only when CMIO reports off.
     private func forceDisableUntilOff(reason: String, useAdminFallback: Bool) async {
         isBusyDisabling = true
         status = .disabling
         iconState = .alert
         lastFailureHint = ""
+        suggestRestartForStuckLED = false
+        lastActionDetail = reason
 
         let killFn: (pid_t) -> Bool = { [processController] pid in
             processController.forceKill(pid: pid)
@@ -318,23 +350,24 @@ final class CameraGuard: ObservableObject {
         for attempt in 1...maxVerifyAttempts {
             await Task.detached(priority: .userInitiated) {
                 CameraDisableHelper.unprivilegedKillDaemons(using: killFn)
-                _ = CameraDisableHelper.requestDisable()
+                _ = CameraDisableHelper.requestLock()
             }.value
 
-            try? await Task.sleep(nanoseconds: 120_000_000)
+            try? await Task.sleep(nanoseconds: 150_000_000)
             monitor.refresh()
+            restrictionActive = CameraDisableHelper.isRestrictionActive
             if !monitor.isCameraOn {
                 off = true
                 break
             }
 
-            // Escalate early and often — cached admin auth avoids repeat prompts.
             if useAdminFallback, attempt == 1 || attempt == 2 || attempt % 3 == 0 {
                 await Task.detached(priority: .userInitiated) {
-                    _ = CameraDisableHelper.privilegedKillDaemons()
+                    _ = CameraDisableHelper.privilegedLockFull()
                 }.value
-                try? await Task.sleep(nanoseconds: 180_000_000)
+                try? await Task.sleep(nanoseconds: 200_000_000)
                 monitor.refresh()
+                restrictionActive = CameraDisableHelper.isRestrictionActive
                 if !monitor.isCameraOn {
                     off = true
                     break
@@ -347,9 +380,19 @@ final class CameraGuard: ObservableObject {
 
         if off {
             lastFailureHint = ""
+            suggestRestartForStuckLED = false
             beginHoldSuppress()
+            lastActionDetail = "\(reason) — verified off"
         } else {
-            lastFailureHint = "Still on after retries. Tap below again, or copy the Terminal fix."
+            // If profile is active but CMIO still on, or profile active and we can't clear LED path:
+            if restrictionActive {
+                suggestRestartForStuckLED = true
+                lastFailureHint = "OS camera ban is on, but LED may be stuck. Restart Mac to clear hardware state."
+                lastActionDetail = "\(reason) — restriction on, sensor still reported"
+            } else {
+                lastFailureHint = "Still on. Tap below, copy Terminal fix, or restart if LED is stuck."
+                lastActionDetail = "\(reason) — still on"
+            }
         }
 
         let system = AppIdentity(bundleID: "com.maccam.camera", processName: "Camera", displayName: "Camera")
@@ -359,31 +402,65 @@ final class CameraGuard: ObservableObject {
                 ActivityEvent(
                     app: system,
                     action: .blocked,
-                    detail: off ? "\(reason) — LED off verified" : "\(reason) — still on"
+                    detail: lastActionDetail
                 )
             )
             if off {
-                notify(
-                    title: "Camera disabled",
-                    body: "Green LED should be off. Apps were not quit."
-                )
+                notify(title: "Camera disabled", body: "Policy applied. Green LED should be off. Apps were not quit.")
+            } else if suggestRestartForStuckLED {
+                notify(title: "Stuck LED?", body: "Restart your Mac — this clears a known macOS camera LED glitch.")
             } else {
-                notify(
-                    title: "Action needed",
-                    body: "Enter your password when asked, or use the copied Terminal command."
-                )
+                notify(title: "Action needed", body: "Enter your password when asked, or use the Terminal fix.")
             }
         }
         refreshStatus()
     }
 
+    private func restoreCameraAccess(reason: String) async {
+        isBusyDisabling = true
+        status = .disabling
+        needsAdminAuthorization = false
+        suggestRestartForStuckLED = false
+        holdSuppressUntil = .distantPast
+        lastFailureHint = ""
+
+        if helperInstalled {
+            await Task.detached(priority: .userInitiated) {
+                _ = CameraDisableHelper.requestUnlock()
+            }.value
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+
+        // If profile still active, escalate once.
+        restrictionActive = CameraDisableHelper.isRestrictionActive
+        if restrictionActive {
+            await Task.detached(priority: .userInitiated) {
+                _ = CameraDisableHelper.privilegedUnlockFull()
+            }.value
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+
+        restrictionActive = CameraDisableHelper.isRestrictionActive
+        isBusyDisabling = false
+        lastActionDetail = reason
+        activityLog.record(
+            ActivityEvent(
+                app: AppIdentity(bundleID: "com.maccam.camera", processName: "Camera", displayName: "Camera"),
+                action: .allowed,
+                detail: reason
+            )
+        )
+        refreshStatus()
+    }
+
     private func beginHoldSuppress() {
-        // Keep clearing for a few seconds so a client can't instantly reopen the sensor.
         holdSuppressUntil = Date().addingTimeInterval(5)
     }
 
     private func refreshStatus() {
         helperInstalled = CameraDisableHelper.isInstalled
+        restrictionActive = CameraDisableHelper.isRestrictionActive
+
         switch mode {
         case .locked:
             if !monitor.isCameraOn && !isBusyDisabling {
@@ -393,6 +470,9 @@ final class CameraGuard: ObservableObject {
             } else if isBusyDisabling {
                 iconState = .alert
                 status = .disabling
+            } else if suggestRestartForStuckLED {
+                iconState = .alert
+                status = .stuckLED
             } else if !helperInstalled {
                 iconState = .alert
                 status = .needsSetup
@@ -404,6 +484,7 @@ final class CameraGuard: ObservableObject {
         case .unlocked:
             iconState = .unlocked
             needsAdminAuthorization = false
+            suggestRestartForStuckLED = false
             if monitor.isCameraOn, let candidate = identifier.identifyLikelyCameraUser() {
                 status = .cameraActive(appName: candidate.app.displayName)
             } else {

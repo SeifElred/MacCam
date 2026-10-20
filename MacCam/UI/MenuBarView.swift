@@ -51,13 +51,17 @@ struct MenuBarView: View {
             header
             lockControl
             statusChip
-            if isLocked && (!guardService.helperInstalled || guardService.needsAdminAuthorization || guardService.monitor.isCameraOn) {
+            diagnosticsStrip
+            if isLocked && (!guardService.helperInstalled || guardService.needsAdminAuthorization || guardService.monitor.isCameraOn || guardService.suggestRestartForStuckLED) {
                 setupButton
                 if !guardService.lastFailureHint.isEmpty {
                     Text(guardService.lastFailureHint)
                         .font(.system(size: 10))
                         .foregroundStyle(DesignTokens.warning)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                if guardService.suggestRestartForStuckLED {
+                    restartButton
                 }
                 if guardService.needsAdminAuthorization || guardService.monitor.isCameraOn {
                     copyFixButton
@@ -156,8 +160,37 @@ struct MenuBarView: View {
         switch guardService.status {
         case .protected: return DesignTokens.mint
         case .unlocked: return DesignTokens.textSecondary
-        case .disabling, .needsAdmin, .needsSetup: return DesignTokens.alert
+        case .disabling, .needsAdmin, .needsSetup, .stuckLED: return DesignTokens.alert
         case .cameraActive: return DesignTokens.warning
+        }
+    }
+
+    private var diagnosticsStrip: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            diagLine("Helper", guardService.helperInstalled ? "installed" : "missing")
+            diagLine("OS ban", guardService.restrictionActive ? "camera blocked" : "off")
+            diagLine("Sensor", guardService.monitor.isCameraOn ? "ON" : "OFF")
+            if !guardService.lastActionDetail.isEmpty {
+                Text(guardService.lastActionDetail)
+                    .font(.system(size: 9))
+                    .foregroundStyle(DesignTokens.textSecondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private func diagLine(_ title: String, _ value: String) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(DesignTokens.textSecondary)
+                .frame(width: 52, alignment: .leading)
+            Text(value)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(DesignTokens.textPrimary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
         }
     }
 
@@ -178,7 +211,7 @@ struct MenuBarView: View {
                         .lineLimit(1)
                     Spacer(minLength: 0)
                 }
-                Text("M1 Pro needs a one-time password so MacCam can turn the camera hardware off. Apps are not quit.")
+                Text("Installs an OS camera ban (allowCamera=false) and holds the M1 camera daemon down. Apps are not quit.")
                     .font(.system(size: 10))
                     .foregroundStyle(DesignTokens.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -199,8 +232,30 @@ struct MenuBarView: View {
 
     private var setupButtonTitle: String {
         if guardService.isBusyDisabling { return "Working… enter password if asked" }
-        if guardService.helperInstalled { return "Turn LED off now" }
+        if guardService.helperInstalled { return "Apply camera ban + clear LED" }
         return "Enable LED protection (one-time)"
+    }
+
+    private var restartButton: some View {
+        Button {
+            guardService.requestRestartMac()
+        } label: {
+            HStack {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Restart Mac to clear stuck LED")
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(DesignTokens.textPrimary)
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(DesignTokens.warning.opacity(0.2))
+            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.controlRadius, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var copyFixButton: some View {

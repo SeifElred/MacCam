@@ -1,10 +1,12 @@
-# MacCam — How to use (M1 / Apple Silicon)
+# MacCam — M1 Pro deep disable
 
-MacCam disables the **built-in FaceTime camera hardware** while locked so apps behave as if there is no camera, and the **green LED turns off**. Apps are **not** force-quit.
+MacCam does **not** force-quit apps. With Privacy Lock On it:
 
-On **M1 Pro**, the camera daemon (`appleh13camerad`) is owned by the system. A normal app cannot stop it without a **one-time admin password**.
+1. Installs an OS **configuration profile** (`allowCamera = false`) — apps see **no camera**
+2. **Boots out** `appleh13camerad` (M1 camera daemon) so the sensor/LED can release
+3. On Unlock, removes the profile and restores the camera service
 
-> Continuity Camera = using an iPhone as a webcam. You can ignore that if you don’t use your iPhone as a Mac camera.
+The green LED is hardwired to camera power — software cannot flip the LED alone. Disabling camera activation is what turns it off.
 
 ## Plug and play
 
@@ -15,40 +17,32 @@ chmod +x scripts/*.sh
 open dist/MacCam.app
 ```
 
-## Required once (this is what makes LED-off reliable)
+## One-time setup (required on M1 Pro)
 
-1. Open MacCam — with lock on it **asks for your password automatically**.
-2. Enter your **Mac password** (do not cancel).
-3. Wait until status says **Camera disabled — LED off**.
-
-That installs a small root helper. After that, MacCam keeps the camera/LED cleared while locked (fast retries + short hold so apps can’t instantly re-grab).
-
-If password was cancelled: open the menu → **Enable LED protection** again.  
-If still stuck: **Copy Terminal fix command** → paste in Terminal → Return → password.
+1. Open MacCam (password prompt appears automatically when locked).
+2. Enter your **Mac password** — do not cancel.
+3. Wait until status is **Camera disabled — LED off**.
+4. Check diagnostics: **OS ban = camera blocked**, **Sensor = OFF**.
 
 ## Everyday
 
 | Goal | Action |
 | --- | --- |
-| LED / camera off | Keep Privacy Lock On |
-| Video call | Unlock → use camera → Lock again |
-| Start at login | Enable Launch at Login |
+| No camera / LED off | Keep Privacy Lock On |
+| Use FaceTime/Zoom | Unlock → call → Lock again |
+| Launch at login | Enable in menu |
 
-## If LED is still on
+## If LED stays on
 
-1. Click **Turn LED off now** / **Enable LED protection** again and enter the password.
-2. Or run once in Terminal:
+1. Tap **Apply camera ban + clear LED** and enter password.
+2. **Copy Terminal fix command** → paste in Terminal.
+3. If diagnostics show **OS ban = camera blocked** and **Sensor = OFF** but the physical LED is still green → **Restart Mac to clear stuck LED** (known macOS glitch).
 
-```bash
-sudo killall -9 appleh13camerad AppleCameraAssistant VDCAssistant UVCAssistant cameracaptured
-```
-
-3. Confirm status is **Camera disabled — LED off** (MacCam only shows that when the system reports the camera is actually off).
-
-## Uninstall helper (optional)
+## Uninstall
 
 ```bash
 sudo launchctl bootout system/com.maccam.cameradisable
+sudo profiles remove -identifier=com.maccam.camera.disable
 sudo rm -f /Library/LaunchDaemons/com.maccam.cameradisable.plist
 sudo rm -rf "/Library/Application Support/MacCam"
 ```

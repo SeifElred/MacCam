@@ -4,7 +4,7 @@ Menu bar camera privacy guard for macOS.
 
 **Privacy Lock On (default)** disables the Mac camera hardware — apps stay open, but they can’t use the camera (as if it isn’t there), and the green LED turns off. Unlock when you need FaceTime or Zoom.
 
-> On M1/M-series Macs, click **Enable LED protection (one-time)** and enter your Mac password once. That installs a tiny root helper so the LED can actually turn off. MacCam does not force-quit your apps.
+> On M1/M-series Macs, enter your Mac password once. MacCam installs a root helper that applies an OS **camera ban** (`allowCamera=false`) and holds `appleh13camerad` down — apps stay open; the LED follows the sensor off. It cannot bit-bang the LED wire (hardware-tied).
 
 ## Plug and play
 

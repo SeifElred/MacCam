@@ -30,6 +30,7 @@ SOURCES=(
   MacCam/Features/CameraDisableHelper.swift
   MacCam/Features/CameraGuard.swift
   MacCam/Features/CameraMonitor.swift
+  MacCam/Features/CameraRestrictionProfile.swift
   MacCam/Features/CameraStackReset.swift
   MacCam/Features/GuardDecisionEngine.swift
   MacCam/Features/LoginItemService.swift
