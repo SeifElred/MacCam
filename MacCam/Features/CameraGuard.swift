@@ -83,11 +83,12 @@ final class CameraGuard: ObservableObject {
     private var didAutoPromptInstall = false
     private var consecutiveOffWhileRestricted = 0
     private var tickTimer: Timer?
-    private let lockedTick: TimeInterval = 0.10
-    private let unlockedTick: TimeInterval = 0.40
-    private let disableCooldown: TimeInterval = 1.0
-    private let maxVerifyAttempts = 4
+    private let lockedTick: TimeInterval = 0.50
+    private let unlockedTick: TimeInterval = 1.0
+    private let disableCooldown: TimeInterval = 2.0
+    private let maxVerifyAttempts = 3
     private var didPresentRestrictionProfile = false
+    private var didHeavyStartThisSession = false
 
     init(
         policy: PolicyStore = PolicyStore(),
@@ -120,15 +121,29 @@ final class CameraGuard: ObservableObject {
         restartTickTimer()
         requestNotificationPermissionIfNeeded()
         helperInstalled = CameraDisableHelper.isInstalled
+        CameraRestrictionProfile.invalidateCache()
         restrictionActive = CameraDisableHelper.isRestrictionActive
+        monitor.refresh()
+        refreshStatus()
 
         guard mode == .locked else { return }
 
-        if !helperInstalled, !didAutoPromptInstall {
-            didAutoPromptInstall = true
-            installHelperAndDisable()
-        } else {
-            ensureCameraOff(reason: "MacCam started")
+        // Never password-prompt or reinstall helper automatically on launch — that froze the app.
+        // Ban already on, or sensor already off → idle; user taps the button if they want more.
+        if restrictionActive || !monitor.isCameraOn {
+            lastActionDetail = restrictionActive ? "Ban active — idle" : "Sensor off — idle"
+            if restrictionActive {
+                suggestRestartForStuckLED = true
+                lastFailureHint = "Camera ban is on. LED may stay green on this Mac — that is hardware/SIP, not a hang."
+            }
+            return
+        }
+
+        guard !didHeavyStartThisSession else { return }
+        didHeavyStartThisSession = true
+        // Soft path only (no admin dialog on launch).
+        Task { @MainActor in
+            await forceDisableUntilOff(reason: "MacCam started", useAdminFallback: false)
         }
     }
 
@@ -255,6 +270,7 @@ final class CameraGuard: ObservableObject {
 
     private func tick() {
         monitor.refresh()
+        // File-exists only (cheap). Restriction uses an 8s cache — never spawn profiles every tick.
         helperInstalled = CameraDisableHelper.isInstalled
         restrictionActive = CameraDisableHelper.isRestrictionActive
 
@@ -263,8 +279,8 @@ final class CameraGuard: ObservableObject {
             return
         }
 
-        // Soft hold-down only (quiet kill) — never reopen Install Profile on a timer.
-        if Date() < holdSuppressUntil, helperInstalled, monitor.isCameraOn {
+        // Only pulse when something is actually using the camera — not on a timer forever.
+        if monitor.isCameraOn, helperInstalled {
             pulseLockIfDue()
         }
 
@@ -353,28 +369,26 @@ final class CameraGuard: ObservableObject {
         monitor.refresh()
         restrictionActive = CameraDisableHelper.isRestrictionActive
 
-        // Offer Install Profile at most once per lock session — not on every retry.
-        if !restrictionActive, !didPresentRestrictionProfile {
-            didPresentRestrictionProfile = true
-            CameraDisableHelper.presentRestrictionProfileOnce()
-            lastFailureHint = "If Install Profile appears: click Install, enter password once. That is the camera ban."
-        }
-
-        // Already off in software — don't loop or keep "Working…".
-        if !monitor.isCameraOn {
+        // Already restricted or sensor off — finish immediately (no dialogs).
+        if restrictionActive || !monitor.isCameraOn {
             isBusyDisabling = false
             needsAdminAuthorization = false
-            beginHoldSuppress()
             if restrictionActive {
-                lastFailureHint = "Software off. If the green LED is still on, restart the Mac once to clear it."
                 suggestRestartForStuckLED = true
-                lastActionDetail = "\(reason) — sensor off, LED may need restart"
+                lastFailureHint = "Camera ban is on. Green LED may stay lit on this Mac even when apps cannot use the camera."
+                lastActionDetail = "\(reason) — ban active"
             } else {
-                lastFailureHint = "Sensor off, but OS ban is not installed yet — complete Install Profile, or LED may stay green."
-                lastActionDetail = "\(reason) — sensor off, ban pending"
+                lastActionDetail = "\(reason) — sensor off"
             }
             refreshStatus()
             return
+        }
+
+        // Offer Install Profile at most once per lock session — not on every retry.
+        if !didPresentRestrictionProfile {
+            didPresentRestrictionProfile = true
+            CameraDisableHelper.presentRestrictionProfileOnce()
+            lastFailureHint = "If Install Profile appears: click Install, enter password once. That is the camera ban."
         }
 
         var off = false

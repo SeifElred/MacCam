@@ -65,6 +65,10 @@ enum CameraDisableHelper {
         CameraRestrictionProfile.isActive
     }
 
+    static func invalidateRestrictionCache() {
+        CameraRestrictionProfile.invalidateCache()
+    }
+
     /// One-time: install helper files + write user profile copy (password for LaunchDaemon only).
     @discardableResult
     static func install() -> Bool {
@@ -133,6 +137,7 @@ enum CameraDisableHelper {
         writeCommand("unlock")
         _ = fireHelper()
         removeUserRestrictionProfiles()
+        CameraRestrictionProfile.invalidateCache()
         unprivilegedKillDaemons { pid in kill(pid, SIGKILL) == 0 }
         return true
     }
@@ -168,6 +173,7 @@ enum CameraDisableHelper {
         ].joined(separator: "; ")
         _ = runAdminShell(shell)
         removeUserRestrictionProfiles()
+        CameraRestrictionProfile.invalidateCache()
         return !isRestrictionActive
     }
 

@@ -118,40 +118,31 @@ enum CameraRestrictionProfile {
         }
     }
 
-    /// Best-effort check whether our restriction profile is installed.
-    static var isActive: Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/profiles")
-        process.arguments = ["list", "-all"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-            process.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let text = String(data: data, encoding: .utf8) ?? ""
-            if text.contains(payloadIdentifier) { return true }
-        } catch {}
+    private static var cachedActive: (at: Date, value: Bool)?
+    private static let cacheTTL: TimeInterval = 8
 
-        // Fallback: restriction defaults suite (NIST check).
-        let check = Process()
-        check.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        check.arguments = [
-            "-l", "JavaScript", "-e",
-            "$.NSUserDefaults.alloc.initWithSuiteName('com.apple.applicationaccess').objectForKey('allowCamera').js"
-        ]
-        let out = Pipe()
-        check.standardOutput = out
-        check.standardError = FileHandle.nullDevice
-        do {
-            try check.run()
-            check.waitUntilExit()
-            let raw = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return raw == "false"
-        } catch {
-            return false
+    /// Invalidate after install/remove so UI updates quickly.
+    static func invalidateCache() {
+        cachedActive = nil
+    }
+
+    /// Fast check: `allowCamera == false` via UserDefaults (no `profiles`/`osascript` spawn).
+    /// Spawning those every tick was freezing the menu bar app.
+    static var isActive: Bool {
+        if let cached = cachedActive, Date().timeIntervalSince(cached.at) < cacheTTL {
+            return cached.value
         }
+        let active = readAllowCameraDisabled()
+        cachedActive = (Date(), active)
+        return active
+    }
+
+    private static func readAllowCameraDisabled() -> Bool {
+        let suite = UserDefaults(suiteName: "com.apple.applicationaccess")
+        guard let raw = suite?.object(forKey: "allowCamera") else { return false }
+        if let flag = raw as? Bool { return flag == false }
+        if let number = raw as? NSNumber { return number.boolValue == false }
+        if let text = raw as? String { return text == "0" || text.lowercased() == "false" }
+        return false
     }
 }

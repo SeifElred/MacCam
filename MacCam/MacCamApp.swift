@@ -44,4 +44,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         AppDelegate.sharedGuard?.stop()
     }
+
+    /// Second double-click while already running — don't look "broken".
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        true
+    }
 }
