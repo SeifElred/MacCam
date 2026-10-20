@@ -21,7 +21,7 @@ enum GuardStatus: Equatable {
         case .unlocked:
             return "Camera unlocked"
         case .clearing(let name):
-            return "Stopping \(name)…"
+            return "Releasing camera (\(name))…"
         case .blocked(let name):
             return "Blocked \(name)"
         case .cameraActive(let name):
@@ -35,7 +35,6 @@ protocol ProcessController {
 }
 
 struct POSIXProcessController: ProcessController {
-    /// SIGKILL so the process cannot keep the camera (and green LED) held open.
     func forceKill(pid: pid_t) -> Bool { kill(pid, SIGKILL) == 0 }
 }
 
@@ -69,8 +68,11 @@ final class CameraGuard: ObservableObject {
     private var loggedAllowKeys: Set<String> = []
     private var statusClearWork: DispatchWorkItem?
     private var tickTimer: Timer?
+    private var ticksWhileCameraOn: Int = 0
+    private var lastDaemonReset: Date = .distantPast
     private let lockedTick: TimeInterval = 0.10
     private let unlockedTick: TimeInterval = 0.35
+    private let daemonResetCooldown: TimeInterval = 2.0
 
     init(
         policy: PolicyStore = PolicyStore(),
@@ -100,6 +102,9 @@ final class CameraGuard: ObservableObject {
         monitor.start()
         restartTickTimer()
         requestNotificationPermissionIfNeeded()
+        if mode == .locked {
+            enforceHardLock()
+        }
     }
 
     func stop() {
@@ -113,7 +118,8 @@ final class CameraGuard: ObservableObject {
         if locked {
             allowOnceSession.removeAll()
             loggedAllowKeys.removeAll()
-            // Immediately clear any active camera hold.
+            ticksWhileCameraOn = 0
+            lastDaemonReset = .distantPast
             enforceHardLock()
         }
         lastBlockedName = nil
@@ -148,96 +154,114 @@ final class CameraGuard: ObservableObject {
         monitor.refresh()
         if mode == .locked {
             enforceHardLock()
+        } else {
+            ticksWhileCameraOn = 0
         }
         refreshStatus()
     }
 
-    /// While locked: keep force-killing non-allowed camera users until CoreMediaIO reports camera off.
+    /// While locked: kill holders + reset camera stack until CoreMediaIO says camera (LED) is off.
     private func enforceHardLock() {
         guard mode == .locked else { return }
+
         guard monitor.isCameraOn else {
+            ticksWhileCameraOn = 0
             notifyCooldown = notifyCooldown.filter { _, date in
                 Date().timeIntervalSince(date) < 30
             }
             return
         }
 
+        ticksWhileCameraOn += 1
+        var killedNames: [String] = []
+
+        // 1) Known apps / frontmost heuristics
         let candidates = identifier.scoreCandidates(
             runningApps: NSWorkspace.shared.runningApplications,
             frontmost: NSWorkspace.shared.frontmostApplication
         )
-
-        var targets: [ProcessCandidate] = []
-        for candidate in candidates.prefix(12) {
-            let key = sessionKey(for: candidate.app)
-            let decision = policy.decision(for: candidate.app)
-            let action = GuardDecisionEngine.action(
-                mode: mode,
-                cameraOn: true,
-                allowOnceActive: allowOnceSession.contains(key),
-                policy: decision
-            )
-            switch action {
-            case .ignore:
-                continue
-            case .allowSilently:
-                if !loggedAllowKeys.contains(key) {
-                    loggedAllowKeys.insert(key)
-                    activityLog.record(ActivityEvent(app: candidate.app, action: .allowed, detail: "Allowlist"))
-                }
-            case .blockNow:
-                targets.append(candidate)
+        for candidate in candidates.prefix(20) {
+            if shouldProtect(candidate.app) { continue }
+            if processController.forceKill(pid: candidate.pid) {
+                killedNames.append(candidate.app.displayName)
+                recordBlockIfNeeded(candidate.app)
             }
         }
 
-        // Camera is on but heuristics found nobody — still stop the frontmost user app.
-        if targets.isEmpty,
-           let front = NSWorkspace.shared.frontmostApplication,
-           front.processIdentifier != getpid(),
-           front.activationPolicy == .regular {
-            let app = AppIdentity(
-                bundleID: front.bundleIdentifier ?? "",
-                processName: front.localizedName ?? "App",
-                displayName: front.localizedName
-            )
-            let key = sessionKey(for: app)
-            if policy.decision(for: app) != .allowlisted, !allowOnceSession.contains(key) {
-                targets.append(
-                    ProcessCandidate(
-                        pid: front.processIdentifier,
-                        app: app,
-                        score: 1,
-                        confidence: 0.2
-                    )
-                )
+        // 2) Browser helpers / capture helpers by process name
+        for pid in CameraStackReset.helperPIDs() {
+            if processController.forceKill(pid: pid) {
+                let name = ProcessEnumerator.processName(pid: pid) ?? "helper"
+                killedNames.append(name)
             }
         }
 
-        guard !targets.isEmpty else { return }
-
-        for target in targets {
-            _ = processController.forceKill(pid: target.pid)
-            recordBlockIfNeeded(target.app)
-        }
-
-        // Re-read immediately; if still on, next tick continues killing.
+        // 3) If still on for a few ticks, reset camera daemons (releases hardware LED)
         monitor.refresh()
-        lastBlockedName = targets.first?.app.displayName
+        let shouldResetDaemons = monitor.isCameraOn
+            && (ticksWhileCameraOn >= 2 || killedNames.isEmpty)
+            && Date().timeIntervalSince(lastDaemonReset) >= daemonResetCooldown
+
+        if shouldResetDaemons {
+            lastDaemonReset = Date()
+            let daemons = CameraStackReset.killDaemons { pid in
+                processController.forceKill(pid: pid)
+            }
+            if !daemons.isEmpty {
+                killedNames.append(contentsOf: daemons)
+                let app = AppIdentity(bundleID: "", processName: "CameraStack", displayName: "Camera system")
+                recordBlockIfNeeded(app, detail: "Reset camera stack")
+            }
+        }
+
+        // 4) Last resort: stop every known camera app (never Finder / random apps)
+        monitor.refresh()
+        if monitor.isCameraOn, ticksWhileCameraOn >= 4 {
+            for app in NSWorkspace.shared.runningApplications {
+                guard let bundle = app.bundleIdentifier,
+                      ProcessIdentifier.knownCameraApps[bundle] != nil else { continue }
+                let identity = AppIdentity(
+                    bundleID: bundle,
+                    processName: app.localizedName ?? bundle,
+                    displayName: app.localizedName
+                )
+                if shouldProtect(identity) { continue }
+                _ = processController.forceKill(pid: app.processIdentifier)
+                killedNames.append(identity.displayName)
+                recordBlockIfNeeded(identity, detail: "Force clear")
+            }
+            // Daemon reset again if still lit
+            if Date().timeIntervalSince(lastDaemonReset) >= daemonResetCooldown {
+                lastDaemonReset = Date()
+                _ = CameraStackReset.killDaemons { pid in
+                    processController.forceKill(pid: pid)
+                }
+            }
+        }
+
+        monitor.refresh()
+        lastBlockedName = killedNames.first ?? lastBlockedName ?? "camera"
         iconState = .alert
         scheduleStatusClear()
     }
 
-    private func recordBlockIfNeeded(_ app: AppIdentity) {
+    private func shouldProtect(_ app: AppIdentity) -> Bool {
+        let key = sessionKey(for: app)
+        if allowOnceSession.contains(key) { return true }
+        return policy.decision(for: app) == .allowlisted
+    }
+
+    private func recordBlockIfNeeded(_ app: AppIdentity, detail: String = "Locked") {
         let key = sessionKey(for: app)
         let now = Date()
         if let last = notifyCooldown[key], now.timeIntervalSince(last) < 8 {
             return
         }
         notifyCooldown[key] = now
-        activityLog.record(ActivityEvent(app: app, action: .blocked, detail: "Locked"))
+        activityLog.record(ActivityEvent(app: app, action: .blocked, detail: detail))
         notify(
             title: "Camera blocked",
-            body: "\(app.displayName) was stopped so the camera LED stays off. Unlock MacCam to use the camera."
+            body: "Stopped \(app.displayName) to turn the camera LED off. Unlock MacCam to use the camera."
         )
     }
 
@@ -261,7 +285,7 @@ final class CameraGuard: ObservableObject {
         case .locked:
             if monitor.isCameraOn {
                 iconState = .alert
-                status = .clearing(appName: lastBlockedName ?? "camera app")
+                status = .clearing(appName: lastBlockedName ?? "camera")
             } else if let name = lastBlockedName {
                 iconState = .locked
                 status = .blocked(appName: name)

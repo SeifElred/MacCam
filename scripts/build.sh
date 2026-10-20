@@ -29,9 +29,11 @@ SOURCES=(
   MacCam/Features/ActivityLog.swift
   MacCam/Features/CameraGuard.swift
   MacCam/Features/CameraMonitor.swift
+  MacCam/Features/CameraStackReset.swift
   MacCam/Features/GuardDecisionEngine.swift
   MacCam/Features/LoginItemService.swift
   MacCam/Features/PolicyStore.swift
+  MacCam/Features/ProcessEnumerator.swift
   MacCam/Features/ProcessIdentifier.swift
   MacCam/UI/ActivityRow.swift
   MacCam/UI/DesignTokens.swift

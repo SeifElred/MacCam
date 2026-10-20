@@ -50,12 +50,14 @@ final class CameraMonitor: ObservableObject {
     /// Pure helper used by tests and production.
     static func isAnyCameraRunning(includeExternal: Bool = true) -> Bool {
         for deviceID in allDeviceIDs() {
-            if !includeExternal && !isBuiltIn(deviceID) { continue }
-            // Skip obvious virtual/DAL-only devices when we can detect them.
-            if isLikelyVirtualOnly(deviceID) { continue }
-            if isRunningSomewhere(deviceID) {
-                return true
+            // Always trust built-in FaceTime camera for LED state.
+            if isBuiltIn(deviceID) {
+                if isRunningSomewhere(deviceID) { return true }
+                continue
             }
+            if !includeExternal { continue }
+            if isLikelyVirtualOnly(deviceID) { continue }
+            if isRunningSomewhere(deviceID) { return true }
         }
         return false
     }
@@ -151,7 +153,6 @@ final class CameraMonitor: ObservableObject {
     }
 }
 
-// Fallback constants if headers differ across SDKs.
 private let kCMIODeviceTransportTypeBuiltIn: UInt32 = 0x626C746E // 'bltn'
 private let kIOAudioDeviceTransportTypeBuiltIn: UInt32 = 0x626C746E
 private let kIOAudioDeviceTransportTypeUSB: UInt32 = 0x75736220 // 'usb '

@@ -21,11 +21,14 @@
 		A1000000000000000000000C /* LoginItemService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* LoginItemService.swift */; };
 		A1000000000000000000000D /* GuardDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000D /* GuardDecisionEngine.swift */; };
 		A10000000000000000000013 /* VisualEffectBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* VisualEffectBackground.swift */; };
+		A10000000000000000000014 /* ProcessEnumerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* ProcessEnumerator.swift */; };
+		A10000000000000000000015 /* CameraStackReset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* CameraStackReset.swift */; };
 		A1000000000000000000000E /* PolicyStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000E /* PolicyStoreTests.swift */; };
 		A1000000000000000000000F /* ProcessIdentifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* ProcessIdentifierTests.swift */; };
 		A10000000000000000000010 /* GuardDecisionEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* GuardDecisionEngineTests.swift */; };
 		A10000000000000000000011 /* ActivityLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* ActivityLogTests.swift */; };
 		A10000000000000000000012 /* CameraMonitorParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* CameraMonitorParsingTests.swift */; };
+		A10000000000000000000016 /* CameraStackResetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001A /* CameraStackResetTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,11 +56,14 @@
 		A2000000000000000000000C /* LoginItemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemService.swift; sourceTree = "<group>"; };
 		A2000000000000000000000D /* GuardDecisionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuardDecisionEngine.swift; sourceTree = "<group>"; };
 		A20000000000000000000017 /* VisualEffectBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffectBackground.swift; sourceTree = "<group>"; };
+		A20000000000000000000018 /* ProcessEnumerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessEnumerator.swift; sourceTree = "<group>"; };
+		A20000000000000000000019 /* CameraStackReset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraStackReset.swift; sourceTree = "<group>"; };
 		A2000000000000000000000E /* PolicyStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyStoreTests.swift; sourceTree = "<group>"; };
 		A2000000000000000000000F /* ProcessIdentifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessIdentifierTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* GuardDecisionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuardDecisionEngineTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000011 /* ActivityLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityLogTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000016 /* CameraMonitorParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraMonitorParsingTests.swift; sourceTree = "<group>"; };
+		A2000000000000000000001A /* CameraStackResetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraStackResetTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000013 /* MacCam.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MacCam.entitlements; sourceTree = "<group>"; };
 		A20000000000000000000014 /* MacCam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -113,6 +119,8 @@
 				A2000000000000000000000B /* CameraGuard.swift */,
 				A2000000000000000000000C /* LoginItemService.swift */,
 				A2000000000000000000000D /* GuardDecisionEngine.swift */,
+				A20000000000000000000018 /* ProcessEnumerator.swift */,
+				A20000000000000000000019 /* CameraStackReset.swift */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -138,6 +146,7 @@
 				A20000000000000000000010 /* GuardDecisionEngineTests.swift */,
 				A20000000000000000000011 /* ActivityLogTests.swift */,
 				A20000000000000000000016 /* CameraMonitorParsingTests.swift */,
+				A2000000000000000000001A /* CameraStackResetTests.swift */,
 			);
 			path = MacCamTests;
 			sourceTree = "<group>";
@@ -255,6 +264,8 @@
 				A1000000000000000000000C /* LoginItemService.swift in Sources */,
 				A1000000000000000000000D /* GuardDecisionEngine.swift in Sources */,
 				A10000000000000000000013 /* VisualEffectBackground.swift in Sources */,
+				A10000000000000000000014 /* ProcessEnumerator.swift in Sources */,
+				A10000000000000000000015 /* CameraStackReset.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -267,6 +278,7 @@
 				A10000000000000000000010 /* GuardDecisionEngineTests.swift in Sources */,
 				A10000000000000000000011 /* ActivityLogTests.swift in Sources */,
 				A10000000000000000000012 /* CameraMonitorParsingTests.swift in Sources */,
+				A10000000000000000000016 /* CameraStackResetTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
