@@ -52,7 +52,7 @@ struct MenuBarView: View {
             lockControl
             statusChip
             diagnosticsStrip
-            if isLocked && (!guardService.helperInstalled || guardService.needsAdminAuthorization || guardService.monitor.isCameraOn || guardService.suggestRestartForStuckLED) {
+            if isLocked && (!guardService.helperInstalled || guardService.needsAdminAuthorization || guardService.monitor.isCameraOn || guardService.suggestRestartForStuckLED || !guardService.restrictionActive) {
                 setupButton
                 if !guardService.lastFailureHint.isEmpty {
                     Text(guardService.lastFailureHint)
@@ -221,7 +221,7 @@ struct MenuBarView: View {
                         .lineLimit(1)
                     Spacer(minLength: 0)
                 }
-                Text("Installs an OS camera ban (allowCamera=false) and holds the M1 camera daemon down. Apps are not quit.")
+                Text("Installs the camera ban once. Apps stay open. If Sensor is OFF but LED stays green, restart the Mac.")
                     .font(.system(size: 10))
                     .foregroundStyle(DesignTokens.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -241,8 +241,9 @@ struct MenuBarView: View {
     }
 
     private var setupButtonTitle: String {
-        if guardService.isBusyDisabling { return "Working… enter password if asked" }
-        if guardService.helperInstalled { return "Apply camera ban + clear LED" }
+        if guardService.isBusyDisabling { return "Working…" }
+        if !guardService.restrictionActive { return "Install camera ban (opens once)" }
+        if guardService.helperInstalled { return "Clear camera sensor again" }
         return "Enable LED protection (one-time)"
     }
 

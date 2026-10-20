@@ -101,28 +101,37 @@ enum CameraDisableHelper {
         ].joined(separator: "; ")
 
         let ok = runAdminShell(shell)
-        // Immediately apply lock for the console user (opens Install Profile UI if needed).
-        _ = requestLock()
+        // Soft lock only — do not open Install Profile here (avoids dialog spam during setup).
+        _ = requestLockQuiet()
         return ok && isInstalled
+    }
+
+    /// Soft lock: trigger helper + kill camera daemons. Never opens Install Profile UI.
+    @discardableResult
+    static func requestLockQuiet() -> Bool {
+        writeUserProfileFile()
+        writeCommand("lock")
+        _ = fireHelper()
+        unprivilegedKillDaemons { pid in kill(pid, SIGKILL) == 0 }
+        return true
+    }
+
+    /// One-shot: open .mobileconfig so the user can Install the ban (user domain).
+    static func presentRestrictionProfileOnce() {
+        guard !isRestrictionActive else { return }
+        openProfileForUserInstall()
     }
 
     @discardableResult
     static func requestLock() -> Bool {
-        writeUserProfileFile()
-        // Prefer opening the profile for the logged-in user (correct domain; avoids root -205).
-        openProfileForUserInstall()
-        writeCommand("lock")
-        _ = fireHelper()
-        // Soft-clear sensor holders (SIP will respawn appleh13camerad when allowed).
-        unprivilegedKillDaemons { pid in kill(pid, SIGKILL) == 0 }
-        return true
+        // Quiet by default — callers that need the Install dialog call presentRestrictionProfileOnce().
+        requestLockQuiet()
     }
 
     @discardableResult
     static func requestUnlock() -> Bool {
         writeCommand("unlock")
         _ = fireHelper()
-        // Also remove as the current user (where the profile actually lives).
         removeUserRestrictionProfiles()
         unprivilegedKillDaemons { pid in kill(pid, SIGKILL) == 0 }
         return true
@@ -130,17 +139,16 @@ enum CameraDisableHelper {
 
     @discardableResult
     static func requestDisable() -> Bool {
-        requestLock()
+        requestLockQuiet()
     }
 
     @discardableResult
     static func privilegedLockFull() -> Bool {
         writeUserProfileFile()
-        openProfileForUserInstall()
+        // Do not open profile here — password prompt + Install dialog together feels like a hang.
         let names = daemonNames.map { "\"\($0)\"" }.joined(separator: " ")
-        // Only kill daemons as admin — never launchctl appleh13camerad (SIP).
         let shell = [
-            "for i in 1 2 3 4 5 6; do /usr/bin/killall -9 \(names) 2>/dev/null || true; /bin/sleep 0.12; done",
+            "for i in 1 2 3; do /usr/bin/killall -9 \(names) 2>/dev/null || true; /bin/sleep 0.1; done",
             "exit 0"
         ].joined(separator: "; ")
         return runAdminShell(shell)
@@ -273,14 +281,14 @@ enum CameraDisableHelper {
         fi
 
         # --- LOCK ---
-        # Install profile for the logged-in user (not root).
+        # Copy profile into the user folder only. Do NOT auto-open Install UI (causes lag/spam).
         if [ -f "$PROFILE" ]; then
+          /bin/mkdir -p "/Users/$CONSOLE_USER/Library/Application Support/MacCam" 2>/dev/null || true
           /bin/cp -f "$PROFILE" "/Users/$CONSOLE_USER/Library/Application Support/MacCam/disable-camera.mobileconfig" 2>/dev/null || true
-          /bin/launchctl asuser "$CONSOLE_UID" /usr/bin/open "/Users/$CONSOLE_USER/Library/Application Support/MacCam/disable-camera.mobileconfig" 2>/dev/null || true
         fi
-        for i in 1 2 3 4 5 6; do
+        for i in 1 2 3; do
         \(killLines)
-          /bin/sleep 0.12
+          /bin/sleep 0.08
         done
         exit 0
         """
