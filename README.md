@@ -31,10 +31,10 @@ Hardware checklist: [docs/MANUAL_QA.md](docs/MANUAL_QA.md)
 - Menu bar only (no Dock icon)
 - Lock / Unlock with clear status
 - Detects camera via CoreMediaIO (no Camera permission required)
-- Freeze → Allow once / Always allow / Block / Always block
-- 30s timeout auto-block
+- When locked, stops apps that open the camera (no freeze — LED can release)
+- Allow / block lists
 - Launch at login (`SMAppService`)
-- Local activity log
+- Compact local activity line
 
 ## Develop
 

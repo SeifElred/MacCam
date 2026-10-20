@@ -39,14 +39,11 @@ If macOS says the app can’t be opened:
 
 ### When an app tries the camera while locked
 
-MacCam freezes that process within ~250ms and shows a decision sheet:
+MacCam **does not freeze apps** (freezing leaves the green LED stuck on). It quits the process that opened the camera so the hardware releases and the LED turns off.
 
-- **Allow once** — resume for this session
-- **Always allow** — add to allow list (no prompt next time)
-- **Block** — quit the process
-- **Always block** — add to block list and quit
-
-If you ignore the prompt for **30 seconds**, MacCam auto-blocks the app.
+- Unknown / block-listed apps → stopped automatically
+- Allow-listed apps → left alone
+- To use FaceTime/Zoom: **Unlock** first (or add the app to the Allow list)
 
 ### Allow / Block lists
 
@@ -69,7 +66,7 @@ open -a MacCam
 
 ## Quit
 
-Menu → **Quit MacCam**, or focus the menu and press **⌘Q**. Quitting resumes any process MacCam had frozen.
+Menu → **Quit MacCam**, or focus the menu and press **⌘Q**.
 
 ## Privacy
 
