@@ -144,10 +144,14 @@ enum CameraDisableHelper {
 
     @discardableResult
     static func privilegedLockFull() -> Bool {
+        _ = CameraRestrictionProfile.writeToSupportDirectory()
         writeUserProfileFile()
-        // Do not open profile here — password prompt + Install dialog together feels like a hang.
         let names = daemonNames.map { "\"\($0)\"" }.joined(separator: " ")
+        // System-scoped install is what actually keeps the LED off (user-open often never completed).
         let shell = [
+            "mkdir -p '\(supportDir)'",
+            "test -f '\(profilePath)' || exit 1",
+            "/usr/bin/profiles install -type configuration -path '\(profilePath)' 2>/dev/null || true",
             "for i in 1 2 3; do /usr/bin/killall -9 \(names) 2>/dev/null || true; /bin/sleep 0.1; done",
             "exit 0"
         ].joined(separator: "; ")
@@ -156,14 +160,10 @@ enum CameraDisableHelper {
 
     @discardableResult
     static func privilegedUnlockFull() -> Bool {
-        // Remove profile as console user (sudo profiles remove often returns -205).
         removeUserRestrictionProfiles()
-        openProfilesSettings()
         let shell = [
-            // Best-effort system-domain remove (ignore -205).
             "/usr/bin/profiles remove -identifier=\(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true",
             "/usr/bin/profiles -R -p \(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true",
-            // Bounce only via killall — launchd/SIP restarts appleh13camerad when an app needs it.
             "/usr/bin/killall -9 appleh13camerad 2>/dev/null || true",
             "exit 0"
         ].joined(separator: "; ")
@@ -281,8 +281,9 @@ enum CameraDisableHelper {
         fi
 
         # --- LOCK ---
-        # Copy profile into the user folder only. Do NOT auto-open Install UI (causes lag/spam).
+        # System-scoped install (admin helper already root) — this is the real LED-off path.
         if [ -f "$PROFILE" ]; then
+          /usr/bin/profiles install -type configuration -path "$PROFILE" 2>/dev/null || true
           /bin/mkdir -p "/Users/$CONSOLE_USER/Library/Application Support/MacCam" 2>/dev/null || true
           /bin/cp -f "$PROFILE" "/Users/$CONSOLE_USER/Library/Application Support/MacCam/disable-camera.mobileconfig" 2>/dev/null || true
         fi
