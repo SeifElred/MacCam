@@ -1,33 +1,37 @@
 #!/bin/bash
 # Install MacCam's System-scoped camera ban (allowCamera=false + CMIO deny).
-# This is the strongest LED-off path that does NOT disable SIP or delete user data.
-# When you need the camera: run scripts/remove-camera-ban.sh
+# macOS no longer allows `profiles install` from Terminal — must Install via System Settings.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROFILE="$HOME/Library/Application Support/MacCam/disable-camera.mobileconfig"
-mkdir -p "$(dirname "$PROFILE")"
-
-# Prefer checked-in profile; else generate from repo copy.
 SRC="$ROOT/config/disable-camera.mobileconfig"
-if [[ -f "$SRC" ]]; then
-  cp -f "$SRC" "$PROFILE"
-else
-  echo "Missing $SRC" >&2
+
+if [[ ! -f "$SRC" ]]; then
+  echo "Missing $SRC — run: git pull" >&2
   exit 1
 fi
 
-echo "Installing System camera ban (password required)…"
-echo "This only adds a removable configuration profile — it does not touch your files."
-sudo profiles install -type configuration -path "$PROFILE"
+mkdir -p "$(dirname "$PROFILE")"
+cp -f "$SRC" "$PROFILE"
 
+echo "Opening the MacCam camera-ban profile…"
 echo
-echo "Verify:"
-profiles list -all | grep -i maccam || true
-/usr/bin/osascript -l JavaScript -e \
-  "$.NSUserDefaults.alloc.initWithSuiteName('com.apple.applicationaccess').objectForKey('allowCamera').js" \
+echo "Do this next (required — Terminal cannot install profiles anymore):"
+echo "  1) System Settings opens (or a Profiles dialog)."
+echo "  2) Go to: System Settings → General → Device Management"
+echo "     (on some macOS: Privacy & Security → Profiles)"
+echo "  3) Select “MacCam Disable Camera” → Install → enter your Mac password."
+echo "  4) Confirm with:  profiles list -all | grep -i maccam"
+echo
+open "$PROFILE"
+sleep 1
+open "x-apple.systempreferences:com.apple.Profiles-Settings.extension" 2>/dev/null \
+  || open "x-apple.systempreferences:com.apple.systempreferences.GeneralSettings" 2>/dev/null \
   || true
-echo "Expected allowCamera check: false"
-echo
-echo "Now: quit all camera apps, wait 5s, confirm green LED is off."
-echo "If LED was stuck on before install: Restart once, then leave the ban installed."
+
+echo "Waiting for you to click Install…"
+echo "After Install, run:"
+echo "  profiles list -all | grep -i maccam"
+echo "  sudo killall -9 appleh13camerad"
+echo "If LED was already stuck green: Restart once, leave the ban installed."

@@ -2,13 +2,21 @@
 # Remove MacCam camera ban so FaceTime / Photo Booth work again.
 set -euo pipefail
 
-echo "Removing MacCam camera ban…"
-# System-scoped — needs sudo
-sudo profiles remove -identifier=com.maccam.camera.disable 2>/dev/null || true
-profiles remove -identifier=com.maccam.camera.disable 2>/dev/null || true
+ID="com.maccam.camera.disable"
 
-echo "Verify (should NOT list MacCam):"
-profiles list -all | grep -i maccam || echo "(none — OK)"
+echo "Trying to remove MacCam camera ban…"
+# May work for user-domain; System-scoped often needs System Settings.
+profiles remove -identifier="$ID" 2>/dev/null || true
+sudo profiles remove -identifier="$ID" 2>/dev/null || true
+
+if profiles list -all 2>/dev/null | grep -qi maccam; then
+  echo
+  echo "Still listed — remove it in System Settings:"
+  echo "  System Settings → General → Device Management → MacCam Disable Camera → Remove"
+  open "x-apple.systempreferences:com.apple.Profiles-Settings.extension" 2>/dev/null || true
+else
+  echo "Profile removed (or was not installed)."
+fi
 
 echo "Soft-bounce camera daemon…"
 sudo killall -9 appleh13camerad 2>/dev/null || true

@@ -147,11 +147,10 @@ enum CameraDisableHelper {
         _ = CameraRestrictionProfile.writeToSupportDirectory()
         writeUserProfileFile()
         let names = daemonNames.map { "\"\($0)\"" }.joined(separator: " ")
-        // System-scoped install is what actually keeps the LED off (user-open often never completed).
+        // macOS removed `profiles install` CLI — open .mobileconfig; user must click Install in Settings.
+        presentRestrictionProfileOnce()
+        openProfilesSettings()
         let shell = [
-            "mkdir -p '\(supportDir)'",
-            "test -f '\(profilePath)' || exit 1",
-            "/usr/bin/profiles install -type configuration -path '\(profilePath)' 2>/dev/null || true",
             "for i in 1 2 3; do /usr/bin/killall -9 \(names) 2>/dev/null || true; /bin/sleep 0.1; done",
             "exit 0"
         ].joined(separator: "; ")
@@ -281,9 +280,9 @@ enum CameraDisableHelper {
         fi
 
         # --- LOCK ---
-        # System-scoped install (admin helper already root) — this is the real LED-off path.
+        # Copy profile for the user; macOS no longer allows `profiles install` from CLI.
+        # App opens System Settings Profiles so the user can click Install (one-time).
         if [ -f "$PROFILE" ]; then
-          /usr/bin/profiles install -type configuration -path "$PROFILE" 2>/dev/null || true
           /bin/mkdir -p "/Users/$CONSOLE_USER/Library/Application Support/MacCam" 2>/dev/null || true
           /bin/cp -f "$PROFILE" "/Users/$CONSOLE_USER/Library/Application Support/MacCam/disable-camera.mobileconfig" 2>/dev/null || true
         fi

@@ -10,20 +10,29 @@ The green LED is hardwired to camera power. The only software way to keep it off
 
 **Do not** run `sudo launchctl kickstart/bootout/enable` on `com.apple.appleh13camerad` — SIP returns “Operation not permitted”.
 
-## Fastest path: install the camera ban in Terminal
+## Fastest path: install the camera ban
+
+Newer macOS removed `profiles install` from Terminal. You must click **Install** in System Settings:
 
 ```bash
 cd /path/to/MacCam
 git pull
 chmod +x scripts/*.sh
-./scripts/install-camera-ban.sh   # enter Mac password
-# If LED was already stuck green: Restart once, leave the ban installed
+./scripts/install-camera-ban.sh
 ```
+
+Then:
+
+1. **System Settings → General → Device Management** (or **Profiles**)
+2. Select **MacCam Disable Camera** → **Install** → enter your Mac password
+3. Confirm: `profiles list -all | grep -i maccam`
+4. If LED was already stuck green: **Restart once**, leave the ban installed
 
 When you need the camera:
 
 ```bash
 ./scripts/remove-camera-ban.sh
+# or remove “MacCam Disable Camera” in Device Management
 ```
 
 ## Plug and play
