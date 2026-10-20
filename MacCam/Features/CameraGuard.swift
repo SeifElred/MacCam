@@ -442,7 +442,7 @@ final class CameraGuard: ObservableObject {
         lastFailureHint = ""
         lastActionDetail = "Restoring camera…"
 
-        // 1) Ask root helper to unlock (remove profile + enable/kickstart daemon).
+        // 1) Ask helper to unlock (remove user profile + killall — no SIP launchctl).
         if helperInstalled {
             await Task.detached(priority: .userInitiated) {
                 _ = CameraDisableHelper.requestUnlock()

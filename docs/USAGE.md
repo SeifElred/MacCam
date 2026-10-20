@@ -2,11 +2,13 @@
 
 MacCam does **not** force-quit apps. With Privacy Lock On it:
 
-1. Installs an OS **configuration profile** (`allowCamera = false`) — apps see **no camera**
-2. **Boots out** `appleh13camerad` (M1 camera daemon) so the sensor/LED can release
-3. On Unlock, removes the profile and restores the camera service
+1. Installs a user **configuration profile** (`allowCamera = false`) — apps see **no camera**
+2. Soft-clears camera daemons with `killall` (SIP forbids `launchctl` on `appleh13camerad`)
+3. On Unlock, removes the profile (user domain) and lets launchd respawn the camera when an app opens it
 
 The green LED is hardwired to camera power — software cannot flip the LED alone. Disabling camera activation is what turns it off.
+
+**Do not** run `sudo launchctl kickstart/bootout/enable` on `com.apple.appleh13camerad` — SIP returns “Operation not permitted”.
 
 ## Plug and play
 
@@ -21,8 +23,9 @@ open dist/MacCam.app
 
 1. Open MacCam (password prompt appears automatically when locked).
 2. Enter your **Mac password** — do not cancel.
-3. Wait until status is **Camera disabled — LED off**.
-4. Check diagnostics: **OS ban = camera blocked**, **Sensor = OFF**.
+3. If a **Profiles** install dialog appears, click Install and enter your password again.
+4. Wait until status is **Camera disabled — LED off**.
+5. Check diagnostics: **OS ban = camera blocked**, **Sensor = OFF**.
 
 ## Everyday
 
@@ -30,12 +33,31 @@ open dist/MacCam.app
 | --- | --- |
 | No camera / LED off | Keep Privacy Lock On |
 | Use FaceTime/Zoom | Unlock → wait for **OS ban = off** → reopen Photo Booth/FaceTime |
-| Camera missing after unlock | Tap **Restore camera now** (enter password) or copy Terminal restore command |
+| Camera missing after unlock | Tap **Restore camera now**, or run the restore commands below (**without** sudo kickstart) |
 | Launch at login | Enable in menu |
+
+## Restore camera (if Unlock left apps without a camera)
+
+Error `-205` with `sudo profiles remove` means the ban is **not** a root/system profile — remove it as your user:
+
+```bash
+# No sudo — user-domain profile
+profiles remove -identifier=com.maccam.camera.disable
+
+# List what’s installed
+profiles list
+
+# Soft-bounce the camera daemon (SIP-safe)
+killall -9 appleh13camerad
+
+# Quit and reopen Photo Booth / FaceTime
+```
+
+If `profiles list` still shows MacCam, open **System Settings → General → Device Management** (or **Profiles**) and remove **MacCam Disable Camera**.
 
 ## If LED stays on
 
-1. Tap **Apply camera ban + clear LED** and enter password.
+1. Tap **Apply camera ban + clear LED** and enter password; complete any Install Profile dialog.
 2. **Copy Terminal fix command** → paste in Terminal.
 3. If diagnostics show **OS ban = camera blocked** and **Sensor = OFF** but the physical LED is still green → **Restart Mac to clear stuck LED** (known macOS glitch).
 
@@ -43,7 +65,8 @@ open dist/MacCam.app
 
 ```bash
 sudo launchctl bootout system/com.maccam.cameradisable
-sudo profiles remove -identifier=com.maccam.camera.disable
+profiles remove -identifier=com.maccam.camera.disable
 sudo rm -f /Library/LaunchDaemons/com.maccam.cameradisable.plist
 sudo rm -rf "/Library/Application Support/MacCam"
+rm -rf "$HOME/Library/Application Support/MacCam"
 ```

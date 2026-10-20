@@ -1,7 +1,10 @@
+import AppKit
 import Foundation
 
-/// Root LaunchDaemon helper: OS camera restriction profile + appleh13camerad bootout.
-/// Does not force-quit user apps. One-time password to install the helper.
+/// SIP-safe camera lock helper for M1 Pro.
+/// - Lock: install user `allowCamera=false` profile + kill camera daemons (no launchctl on appleh13camerad).
+/// - Unlock: remove that profile; let launchd respawn the camera when an app opens it.
+/// Never bootout/disable/kickstart `com.apple.appleh13camerad` — SIP returns "Operation not permitted".
 enum CameraDisableHelper {
     static let label = "com.maccam.cameradisable"
     static let supportDir = "/Library/Application Support/MacCam"
@@ -9,9 +12,12 @@ enum CameraDisableHelper {
     static let triggerPath = supportDir + "/trigger"
     static let commandPath = supportDir + "/command"
     static let profilePath = supportDir + "/disable-camera.mobileconfig"
+    static let userProfilePath: String = {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return home + "/Library/Application Support/MacCam/disable-camera.mobileconfig"
+    }()
     static let plistPath = "/Library/LaunchDaemons/\(label).plist"
 
-    /// M1 Pro uses appleh13camerad for the built-in FaceTime camera.
     static let daemonNames: [String] = [
         "appleh13camerad",
         "AppleCameraAssistant",
@@ -24,24 +30,23 @@ enum CameraDisableHelper {
     static var terminalFixCommand: String {
         let names = daemonNames.joined(separator: " ")
         return [
-            "sudo /usr/bin/profiles install -type configuration -path '\(profilePath)'",
-            "sudo /usr/bin/killall -9 \(names)",
-            "sudo /bin/launchctl bootout system/com.apple.appleh13camerad",
-            "sleep 0.2",
-            "sudo /usr/bin/killall -9 \(names)"
+            "mkdir -p \"$HOME/Library/Application Support/MacCam\"",
+            "open '\(userProfilePath)'",
+            "echo 'In the dialog: Install the MacCam profile, then enter your password.'",
+            "/usr/bin/killall -9 \(names) 2>/dev/null || true"
         ].joined(separator: "; ")
     }
 
-    /// Restores camera after unlock (run if apps still cannot see the camera).
+    /// Restores camera after unlock (SIP-safe — no appleh13camerad kickstart).
     static var terminalRestoreCommand: String {
         [
-            "sudo /usr/bin/profiles remove -identifier=\(CameraRestrictionProfile.payloadIdentifier)",
-            "sudo /usr/bin/profiles -R -p \(CameraRestrictionProfile.payloadIdentifier)",
-            "sudo /bin/launchctl enable system/com.apple.appleh13camerad",
-            "sudo /bin/launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.appleh13camerad.plist",
-            "sudo /bin/launchctl kickstart -k system/com.apple.appleh13camerad",
-            "sudo /usr/bin/killall -9 appleh13camerad",
-            "sudo /bin/launchctl kickstart -k system/com.apple.appleh13camerad"
+            "# Remove MacCam camera ban (try without sudo first):",
+            "profiles remove -identifier=\(CameraRestrictionProfile.payloadIdentifier)",
+            "profiles -R -p \(CameraRestrictionProfile.payloadIdentifier)",
+            "# If still listed, open System Settings → General → Device Management / Profiles and remove “MacCam Disable Camera”",
+            "open \"x-apple.systempreferences:com.apple.Profiles-Settings.extension\"",
+            "/usr/bin/killall -9 appleh13camerad 2>/dev/null || true",
+            "echo 'Quit and reopen Photo Booth / FaceTime'"
         ].joined(separator: "; ")
     }
 
@@ -60,9 +65,10 @@ enum CameraDisableHelper {
         CameraRestrictionProfile.isActive
     }
 
-    /// Installs root helper + embeds mobileconfig (one password dialog).
+    /// One-time: install helper files + write user profile copy (password for LaunchDaemon only).
     @discardableResult
     static func install() -> Bool {
+        writeUserProfileFile()
         let script = disableScriptContents()
         let plist = launchDaemonPlist()
         let profile = CameraRestrictionProfile.profileXML
@@ -89,73 +95,73 @@ enum CameraDisableHelper {
             "/bin/launchctl bootstrap system '\(plistPath)' 2>/dev/null || true",
             "/bin/launchctl load -w '\(plistPath)' 2>/dev/null || true",
             "/bin/launchctl enable system/\(label) 2>/dev/null || true",
-            "echo lock > '\(commandPath)'",
-            "'\(scriptPath)'",
             "test -f '\(scriptPath)'",
             "test -f '\(plistPath)'",
-            "test -f '\(profilePath)'",
             "exit 0"
         ].joined(separator: "; ")
 
         let ok = runAdminShell(shell)
+        // Immediately apply lock for the console user (opens Install Profile UI if needed).
+        _ = requestLock()
         return ok && isInstalled
     }
 
-    /// Lock: install allowCamera=false profile + bootout camera daemon (no user-app quits).
     @discardableResult
     static func requestLock() -> Bool {
+        writeUserProfileFile()
+        // Prefer opening the profile for the logged-in user (correct domain; avoids root -205).
+        openProfileForUserInstall()
         writeCommand("lock")
-        return fireHelper()
+        _ = fireHelper()
+        // Soft-clear sensor holders (SIP will respawn appleh13camerad when allowed).
+        unprivilegedKillDaemons { pid in kill(pid, SIGKILL) == 0 }
+        return true
     }
 
-    /// Unlock: remove restriction profile + restore appleh13camerad.
     @discardableResult
     static func requestUnlock() -> Bool {
         writeCommand("unlock")
-        return fireHelper()
+        _ = fireHelper()
+        // Also remove as the current user (where the profile actually lives).
+        removeUserRestrictionProfiles()
+        unprivilegedKillDaemons { pid in kill(pid, SIGKILL) == 0 }
+        return true
     }
 
-    /// Backward-compatible alias used by older call sites.
     @discardableResult
     static func requestDisable() -> Bool {
         requestLock()
     }
 
-    /// Admin fallback: multi-pulse kill + bootout + profile install in one password.
     @discardableResult
     static func privilegedLockFull() -> Bool {
+        writeUserProfileFile()
+        openProfileForUserInstall()
         let names = daemonNames.map { "\"\($0)\"" }.joined(separator: " ")
-        let profileB64 = Data(CameraRestrictionProfile.profileXML.utf8).base64EncodedString()
+        // Only kill daemons as admin — never launchctl appleh13camerad (SIP).
         let shell = [
-            "mkdir -p '\(supportDir)'",
-            "echo '\(profileB64)' | /usr/bin/base64 -D > '\(profilePath)'",
-            "chmod 644 '\(profilePath)'",
-            "/usr/bin/profiles install -type configuration -path '\(profilePath)' 2>/dev/null || true",
             "for i in 1 2 3 4 5 6; do /usr/bin/killall -9 \(names) 2>/dev/null || true; /bin/sleep 0.12; done",
-            // bootout only — do NOT launchctl disable (that can stick and block unlock).
-            "/bin/launchctl bootout system/com.apple.appleh13camerad 2>/dev/null || true",
             "exit 0"
         ].joined(separator: "; ")
         return runAdminShell(shell)
     }
 
-    /// Always use this on Unlock — removes OS ban and brings appleh13camerad back.
     @discardableResult
     static func privilegedUnlockFull() -> Bool {
+        // Remove profile as console user (sudo profiles remove often returns -205).
+        removeUserRestrictionProfiles()
+        openProfilesSettings()
         let shell = [
+            // Best-effort system-domain remove (ignore -205).
             "/usr/bin/profiles remove -identifier=\(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true",
             "/usr/bin/profiles -R -p \(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true",
-            "/bin/launchctl enable system/com.apple.appleh13camerad 2>/dev/null || true",
-            "/bin/launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.appleh13camerad.plist 2>/dev/null || true",
-            "/bin/launchctl load -w /System/Library/LaunchDaemons/com.apple.appleh13camerad.plist 2>/dev/null || true",
-            "/bin/launchctl kickstart -k system/com.apple.appleh13camerad 2>/dev/null || true",
-            // If a zombie instance blocks devices, bounce once cleanly:
+            // Bounce only via killall — launchd/SIP restarts appleh13camerad when an app needs it.
             "/usr/bin/killall -9 appleh13camerad 2>/dev/null || true",
-            "/bin/sleep 0.3",
-            "/bin/launchctl kickstart -k system/com.apple.appleh13camerad 2>/dev/null || true",
             "exit 0"
         ].joined(separator: "; ")
-        return runAdminShell(shell)
+        _ = runAdminShell(shell)
+        removeUserRestrictionProfiles()
+        return !isRestrictionActive
     }
 
     @discardableResult
@@ -175,13 +181,61 @@ enum CameraDisableHelper {
         }
     }
 
+    static func openProfilesSettings() {
+        // Sonoma/Sequoia: Device Management / Profiles pane.
+        let urls = [
+            "x-apple.systempreferences:com.apple.Profiles-Settings.extension",
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension",
+            "/System/Library/PreferencePanes/Profiles.prefPane"
+        ]
+        for raw in urls {
+            if let url = URL(string: raw) ?? URL(fileURLWithPath: raw) as URL? {
+                if NSWorkspace.shared.open(url) { return }
+            }
+        }
+    }
+
     // MARK: - Internals
 
+    @discardableResult
+    private static func writeUserProfileFile() -> URL? {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/MacCam", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("disable-camera.mobileconfig")
+        do {
+            try CameraRestrictionProfile.profileXML.write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    private static func openProfileForUserInstall() {
+        guard let url = writeUserProfileFile() else { return }
+        // Opening .mobileconfig shows Install for the current user (correct profile domain).
+        NSWorkspace.shared.open(url)
+    }
+
+    private static func removeUserRestrictionProfiles() {
+        // Current user domain (install via open lands here; sudo profiles remove → -205).
+        _ = runProcess("/usr/bin/profiles", arguments: [
+            "remove", "-identifier=\(CameraRestrictionProfile.payloadIdentifier)"
+        ])
+        _ = runProcess("/usr/bin/profiles", arguments: [
+            "-R", "-p", CameraRestrictionProfile.payloadIdentifier
+        ])
+        let uid = getuid()
+        _ = runProcess("/bin/launchctl", arguments: [
+            "asuser", "\(uid)",
+            "/usr/bin/profiles", "remove",
+            "-identifier=\(CameraRestrictionProfile.payloadIdentifier)"
+        ])
+    }
+
     private static func writeCommand(_ command: String) {
-        // Write command before trigger so WatchPaths always sees the right action.
         let cmdURL = URL(fileURLWithPath: commandPath)
         try? (command + "\n").write(to: cmdURL, atomically: true, encoding: .utf8)
-        // Brief settle so the helper never races an empty/stale command file.
         usleep(50_000)
         let stamp = "\(Date().timeIntervalSince1970)-\(command)\n"
         try? stamp.write(toFile: triggerPath, atomically: true, encoding: .utf8)
@@ -191,7 +245,6 @@ enum CameraDisableHelper {
     private static func fireHelper() -> Bool {
         guard isInstalled else { return false }
         _ = runProcess("/bin/launchctl", arguments: ["kickstart", "-k", "system/\(label)"])
-        // WatchPaths also fires from trigger write.
         return true
     }
 
@@ -201,39 +254,34 @@ enum CameraDisableHelper {
             .joined(separator: "\n")
         return """
         #!/bin/bash
-        # MacCam root helper — M1 Pro / Apple Silicon
-        # Commands: lock (default) | unlock
-        # Does NOT quit user apps (Zoom/Chrome/FaceTime stay open).
+        # MacCam helper — SIP-safe (never kickstart/bootout appleh13camerad)
         SUPPORT="\(supportDir)"
         CMD_FILE="$SUPPORT/command"
         PROFILE="$SUPPORT/disable-camera.mobileconfig"
-        CMD=$(/bin/cat "$CMD_FILE" 2>/dev/null || echo lock)
+        CMD=$(/usr/bin/tr -d '\\n' < "$CMD_FILE" 2>/dev/null || echo lock)
+        CONSOLE_USER=$(/usr/bin/stat -f%Su /dev/console)
+        CONSOLE_UID=$(/usr/bin/id -u "$CONSOLE_USER")
 
         if [ "$CMD" = "unlock" ]; then
+          # Remove user-domain profile (sudo profiles remove often returns -205).
+          /bin/launchctl asuser "$CONSOLE_UID" /usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/profiles remove -identifier=\(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true
+          /bin/launchctl asuser "$CONSOLE_UID" /usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/profiles -R -p \(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true
           /usr/bin/profiles remove -identifier=\(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true
-          /usr/bin/profiles -R -p \(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true
-          /bin/launchctl enable system/com.apple.appleh13camerad 2>/dev/null || true
-          /bin/launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.appleh13camerad.plist 2>/dev/null || true
-          /bin/launchctl load -w /System/Library/LaunchDaemons/com.apple.appleh13camerad.plist 2>/dev/null || true
-          /bin/launchctl kickstart -k system/com.apple.appleh13camerad 2>/dev/null || true
-          /usr/bin/killall -9 appleh13camerad 2>/dev/null || true
-          /bin/sleep 0.3
-          /bin/launchctl kickstart -k system/com.apple.appleh13camerad 2>/dev/null || true
+          # Soft bounce only — SIP restarts the daemon when an app opens the camera.
+        \(killLines)
           exit 0
         fi
 
         # --- LOCK ---
+        # Install profile for the logged-in user (not root).
         if [ -f "$PROFILE" ]; then
-          /usr/bin/profiles install -type configuration -path "$PROFILE" 2>/dev/null || true
+          /bin/cp -f "$PROFILE" "/Users/$CONSOLE_USER/Library/Application Support/MacCam/disable-camera.mobileconfig" 2>/dev/null || true
+          /bin/launchctl asuser "$CONSOLE_UID" /usr/bin/open "/Users/$CONSOLE_USER/Library/Application Support/MacCam/disable-camera.mobileconfig" 2>/dev/null || true
         fi
-
         for i in 1 2 3 4 5 6; do
         \(killLines)
           /bin/sleep 0.12
         done
-
-        # Temporary stop only — never "disable" (that sticks and blocks unlock).
-        /bin/launchctl bootout system/com.apple.appleh13camerad 2>/dev/null || true
         exit 0
         """
     }

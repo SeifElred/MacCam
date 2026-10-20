@@ -1,6 +1,6 @@
 import Foundation
 
-/// Facade for camera disable — prefers OS restriction profile + daemon bootout.
+/// Facade for camera disable — prefers OS restriction profile + SIP-safe killall.
 enum CameraStackReset {
     static var daemonNames: [String] { CameraDisableHelper.daemonNames }
 
