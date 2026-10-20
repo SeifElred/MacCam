@@ -1,0 +1,425 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* MacCamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* MacCamApp.swift */; };
+		A10000000000000000000002 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* DesignTokens.swift */; };
+		A10000000000000000000003 /* StatusIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* StatusIcon.swift */; };
+		A10000000000000000000004 /* ActivityRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* ActivityRow.swift */; };
+		A10000000000000000000005 /* SettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* SettingsSection.swift */; };
+		A10000000000000000000006 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* MenuBarView.swift */; };
+		A10000000000000000000007 /* PolicyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* PolicyStore.swift */; };
+		A10000000000000000000008 /* ActivityLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* ActivityLog.swift */; };
+		A10000000000000000000009 /* CameraMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* CameraMonitor.swift */; };
+		A1000000000000000000000A /* ProcessIdentifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* ProcessIdentifier.swift */; };
+		A1000000000000000000000B /* CameraGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* CameraGuard.swift */; };
+		A1000000000000000000000C /* LoginItemService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* LoginItemService.swift */; };
+		A1000000000000000000000D /* GuardDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000D /* GuardDecisionEngine.swift */; };
+		A1000000000000000000000E /* PolicyStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000E /* PolicyStoreTests.swift */; };
+		A1000000000000000000000F /* ProcessIdentifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* ProcessIdentifierTests.swift */; };
+		A10000000000000000000010 /* GuardDecisionEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* GuardDecisionEngineTests.swift */; };
+		A10000000000000000000011 /* ActivityLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* ActivityLogTests.swift */; };
+		A10000000000000000000012 /* CameraMonitorParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* CameraMonitorParsingTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A30000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A40000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000001;
+			remoteInfo = MacCam;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A20000000000000000000001 /* MacCamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacCamApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* StatusIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusIcon.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* ActivityRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityRow.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* SettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSection.swift; sourceTree = "<group>"; };
+		A20000000000000000000006 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* PolicyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyStore.swift; sourceTree = "<group>"; };
+		A20000000000000000000008 /* ActivityLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityLog.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* CameraMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraMonitor.swift; sourceTree = "<group>"; };
+		A2000000000000000000000A /* ProcessIdentifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessIdentifier.swift; sourceTree = "<group>"; };
+		A2000000000000000000000B /* CameraGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraGuard.swift; sourceTree = "<group>"; };
+		A2000000000000000000000C /* LoginItemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemService.swift; sourceTree = "<group>"; };
+		A2000000000000000000000D /* GuardDecisionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuardDecisionEngine.swift; sourceTree = "<group>"; };
+		A2000000000000000000000E /* PolicyStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyStoreTests.swift; sourceTree = "<group>"; };
+		A2000000000000000000000F /* ProcessIdentifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessIdentifierTests.swift; sourceTree = "<group>"; };
+		A20000000000000000000010 /* GuardDecisionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuardDecisionEngineTests.swift; sourceTree = "<group>"; };
+		A20000000000000000000011 /* ActivityLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityLogTests.swift; sourceTree = "<group>"; };
+		A20000000000000000000016 /* CameraMonitorParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraMonitorParsingTests.swift; sourceTree = "<group>"; };
+		A20000000000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000013 /* MacCam.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MacCam.entitlements; sourceTree = "<group>"; };
+		A20000000000000000000014 /* MacCam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000015 /* MacCamTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MacCamTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A60000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A60000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A70000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A70000000000000000000002 /* MacCam */,
+				A70000000000000000000005 /* MacCamTests */,
+				A70000000000000000000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A70000000000000000000002 /* MacCam */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000001 /* MacCamApp.swift */,
+				A20000000000000000000012 /* Info.plist */,
+				A20000000000000000000013 /* MacCam.entitlements */,
+				A70000000000000000000003 /* Features */,
+				A70000000000000000000004 /* UI */,
+			);
+			path = MacCam;
+			sourceTree = "<group>";
+		};
+		A70000000000000000000003 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000007 /* PolicyStore.swift */,
+				A20000000000000000000008 /* ActivityLog.swift */,
+				A20000000000000000000009 /* CameraMonitor.swift */,
+				A2000000000000000000000A /* ProcessIdentifier.swift */,
+				A2000000000000000000000B /* CameraGuard.swift */,
+				A2000000000000000000000C /* LoginItemService.swift */,
+				A2000000000000000000000D /* GuardDecisionEngine.swift */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		A70000000000000000000004 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000002 /* DesignTokens.swift */,
+				A20000000000000000000003 /* StatusIcon.swift */,
+				A20000000000000000000004 /* ActivityRow.swift */,
+				A20000000000000000000005 /* SettingsSection.swift */,
+				A20000000000000000000006 /* MenuBarView.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		A70000000000000000000005 /* MacCamTests */ = {
+			isa = PBXGroup;
+			children = (
+				A2000000000000000000000E /* PolicyStoreTests.swift */,
+				A2000000000000000000000F /* ProcessIdentifierTests.swift */,
+				A20000000000000000000010 /* GuardDecisionEngineTests.swift */,
+				A20000000000000000000011 /* ActivityLogTests.swift */,
+				A20000000000000000000016 /* CameraMonitorParsingTests.swift */,
+			);
+			path = MacCamTests;
+			sourceTree = "<group>";
+		};
+		A70000000000000000000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000014 /* MacCam.app */,
+				A20000000000000000000015 /* MacCamTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A50000000000000000000001 /* MacCam */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000000000000000000003 /* Build configuration list for PBXNativeTarget "MacCam" */;
+			buildPhases = (
+				A90000000000000000000001 /* Sources */,
+				A60000000000000000000001 /* Frameworks */,
+				AA0000000000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MacCam;
+			productName = MacCam;
+			productReference = A20000000000000000000014 /* MacCam.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A50000000000000000000002 /* MacCamTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000000000000000000004 /* Build configuration list for PBXNativeTarget "MacCamTests" */;
+			buildPhases = (
+				A90000000000000000000002 /* Sources */,
+				A60000000000000000000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A30000000000000000000002 /* PBXTargetDependency */,
+			);
+			name = MacCamTests;
+			productName = MacCamTests;
+			productReference = A20000000000000000000015 /* MacCamTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A40000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					A50000000000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					A50000000000000000000002 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = A50000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = A80000000000000000000001 /* Build configuration list for PBXProject "MacCam" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A70000000000000000000001;
+			productRefGroup = A70000000000000000000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A50000000000000000000001 /* MacCam */,
+				A50000000000000000000002 /* MacCamTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA0000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A90000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* MacCamApp.swift in Sources */,
+				A10000000000000000000002 /* DesignTokens.swift in Sources */,
+				A10000000000000000000003 /* StatusIcon.swift in Sources */,
+				A10000000000000000000004 /* ActivityRow.swift in Sources */,
+				A10000000000000000000005 /* SettingsSection.swift in Sources */,
+				A10000000000000000000006 /* MenuBarView.swift in Sources */,
+				A10000000000000000000007 /* PolicyStore.swift in Sources */,
+				A10000000000000000000008 /* ActivityLog.swift in Sources */,
+				A10000000000000000000009 /* CameraMonitor.swift in Sources */,
+				A1000000000000000000000A /* ProcessIdentifier.swift in Sources */,
+				A1000000000000000000000B /* CameraGuard.swift in Sources */,
+				A1000000000000000000000C /* LoginItemService.swift in Sources */,
+				A1000000000000000000000D /* GuardDecisionEngine.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A90000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000000000000000000000E /* PolicyStoreTests.swift in Sources */,
+				A1000000000000000000000F /* ProcessIdentifierTests.swift in Sources */,
+				A10000000000000000000010 /* GuardDecisionEngineTests.swift in Sources */,
+				A10000000000000000000011 /* ActivityLogTests.swift in Sources */,
+				A10000000000000000000012 /* CameraMonitorParsingTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A30000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A50000000000000000000001 /* MacCam */;
+			targetProxy = A30000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		AB0000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AB0000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		AB0000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MacCam/MacCam.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MacCam/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maccam.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		AB0000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MacCam/MacCam.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MacCam/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maccam.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+		AB0000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maccam.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MacCam.app/Contents/MacOS/MacCam";
+			};
+			name = Debug;
+		};
+		AB0000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maccam.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MacCam.app/Contents/MacOS/MacCam";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A80000000000000000000001 /* Build configuration list for PBXProject "MacCam" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB0000000000000000000001 /* Debug */,
+				AB0000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A80000000000000000000003 /* Build configuration list for PBXNativeTarget "MacCam" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB0000000000000000000003 /* Debug */,
+				AB0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A80000000000000000000004 /* Build configuration list for PBXNativeTarget "MacCamTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB0000000000000000000005 /* Debug */,
+				AB0000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A40000000000000000000001 /* Project object */;
+}
