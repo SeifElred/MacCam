@@ -7,11 +7,7 @@ final class CameraStackResetTests: XCTestCase {
         XCTAssertTrue(CameraStackReset.matchesDaemon("VDCAssistant"))
         XCTAssertTrue(CameraStackReset.matchesDaemon("AppleCameraAssistant"))
         XCTAssertFalse(CameraStackReset.matchesDaemon("Finder"))
-    }
-
-    func testMatchesHelpers() {
-        XCTAssertTrue(CameraStackReset.matchesHelper("Google Chrome Helper"))
-        XCTAssertTrue(CameraStackReset.matchesHelper("Zoom.us"))
-        XCTAssertFalse(CameraStackReset.matchesHelper("Notes"))
+        XCTAssertFalse(CameraStackReset.matchesDaemon("zoom.us"))
+        XCTAssertFalse(CameraStackReset.matchesDaemon("Google Chrome"))
     }
 }

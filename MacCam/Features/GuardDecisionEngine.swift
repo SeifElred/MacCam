@@ -3,27 +3,21 @@ import Foundation
 /// Pure decision logic for CameraGuard — unit-testable without macOS process APIs.
 enum GuardEnforcementAction: Equatable {
     case ignore
+    /// Leave camera on (allow-listed session).
     case allowSilently
-    /// Force-stop the process so camera hardware (and LED) can release.
-    case blockNow
+    /// Disable camera hardware (apps stay open; stream fails; LED can turn off).
+    case disableHardware
 }
 
 enum GuardDecisionEngine {
     static func action(
         mode: GuardMode,
         cameraOn: Bool,
-        allowOnceActive: Bool,
-        policy: PolicyDecision
+        allowlistedUserLikely: Bool
     ) -> GuardEnforcementAction {
         guard mode == .locked else { return .ignore }
         guard cameraOn else { return .ignore }
-        if allowOnceActive { return .ignore }
-
-        switch policy {
-        case .allowlisted:
-            return .allowSilently
-        case .blocklisted, .unknown:
-            return .blockNow
-        }
+        if allowlistedUserLikely { return .allowSilently }
+        return .disableHardware
     }
 }

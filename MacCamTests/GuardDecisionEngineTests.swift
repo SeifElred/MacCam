@@ -2,63 +2,31 @@ import XCTest
 @testable import MacCam
 
 final class GuardDecisionEngineTests: XCTestCase {
-    func testUnlockedIgnoresCamera() {
-        let action = GuardDecisionEngine.action(
-            mode: .unlocked,
-            cameraOn: true,
-            allowOnceActive: false,
-            policy: .unknown
+    func testUnlockedIgnores() {
+        XCTAssertEqual(
+            GuardDecisionEngine.action(mode: .unlocked, cameraOn: true, allowlistedUserLikely: false),
+            .ignore
         )
-        XCTAssertEqual(action, .ignore)
     }
 
     func testLockedCameraOffIgnores() {
-        let action = GuardDecisionEngine.action(
-            mode: .locked,
-            cameraOn: false,
-            allowOnceActive: false,
-            policy: .unknown
+        XCTAssertEqual(
+            GuardDecisionEngine.action(mode: .locked, cameraOn: false, allowlistedUserLikely: false),
+            .ignore
         )
-        XCTAssertEqual(action, .ignore)
     }
 
-    func testLockedUnknownBlocksImmediately() {
-        let action = GuardDecisionEngine.action(
-            mode: .locked,
-            cameraOn: true,
-            allowOnceActive: false,
-            policy: .unknown
+    func testLockedDisablesHardware() {
+        XCTAssertEqual(
+            GuardDecisionEngine.action(mode: .locked, cameraOn: true, allowlistedUserLikely: false),
+            .disableHardware
         )
-        XCTAssertEqual(action, .blockNow)
     }
 
-    func testAllowlistSilentAllow() {
-        let action = GuardDecisionEngine.action(
-            mode: .locked,
-            cameraOn: true,
-            allowOnceActive: false,
-            policy: .allowlisted
+    func testAllowlistedLeftAlone() {
+        XCTAssertEqual(
+            GuardDecisionEngine.action(mode: .locked, cameraOn: true, allowlistedUserLikely: true),
+            .allowSilently
         )
-        XCTAssertEqual(action, .allowSilently)
-    }
-
-    func testBlocklistBlocksNow() {
-        let action = GuardDecisionEngine.action(
-            mode: .locked,
-            cameraOn: true,
-            allowOnceActive: false,
-            policy: .blocklisted
-        )
-        XCTAssertEqual(action, .blockNow)
-    }
-
-    func testAllowOnceSessionSkips() {
-        let action = GuardDecisionEngine.action(
-            mode: .locked,
-            cameraOn: true,
-            allowOnceActive: true,
-            policy: .unknown
-        )
-        XCTAssertEqual(action, .ignore)
     }
 }

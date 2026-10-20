@@ -83,7 +83,7 @@ struct MenuBarView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(DesignTokens.textPrimary)
                     .lineLimit(1)
-                Text(isLocked ? "Camera locked" : "Camera unlocked")
+                Text(isLocked ? "Camera disabled" : "Camera available")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(DesignTokens.textSecondary)
                     .lineLimit(1)
@@ -103,7 +103,7 @@ struct MenuBarView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(DesignTokens.textPrimary)
                         .lineLimit(1)
-                    Text(isLocked ? "LED stays off" : "Apps may use camera")
+                    Text(isLocked ? "No camera for apps · LED off" : "Apps can use the camera")
                         .font(.system(size: 11))
                         .foregroundStyle(DesignTokens.textSecondary)
                         .lineLimit(1)
@@ -144,7 +144,7 @@ struct MenuBarView: View {
         switch guardService.status {
         case .protected: return DesignTokens.mint
         case .unlocked: return DesignTokens.textSecondary
-        case .clearing, .blocked: return DesignTokens.alert
+        case .disabling: return DesignTokens.alert
         case .cameraActive: return DesignTokens.warning
         }
     }
@@ -171,7 +171,7 @@ struct MenuBarView: View {
     private func shortAction(_ action: ActivityAction) -> String {
         switch action {
         case .allowed: return "· allowed"
-        case .blocked, .autoBlocked: return "· blocked"
+        case .blocked, .autoBlocked: return "· disabled"
         case .prompted: return "· prompted"
         case .unlockedUse: return "· used"
         }
