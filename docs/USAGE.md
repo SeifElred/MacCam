@@ -29,7 +29,8 @@ open dist/MacCam.app
 | Goal | Action |
 | --- | --- |
 | No camera / LED off | Keep Privacy Lock On |
-| Use FaceTime/Zoom | Unlock → call → Lock again |
+| Use FaceTime/Zoom | Unlock → wait for **OS ban = off** → reopen Photo Booth/FaceTime |
+| Camera missing after unlock | Tap **Restore camera now** (enter password) or copy Terminal restore command |
 | Launch at login | Enable in menu |
 
 ## If LED stays on

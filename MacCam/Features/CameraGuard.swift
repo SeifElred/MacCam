@@ -416,6 +416,23 @@ final class CameraGuard: ObservableObject {
         refreshStatus()
     }
 
+    /// Public so the menu can force a restore if apps still cannot see the camera.
+    func restoreCameraNow() {
+        Task { @MainActor in
+            await restoreCameraAccess(reason: "Manual restore")
+        }
+    }
+
+    func copyTerminalRestoreCommand() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(CameraDisableHelper.terminalRestoreCommand, forType: .string)
+        didCopyFixCommand = true
+        lastFailureHint = "Copied restore command. Paste in Terminal, press Return, enter password."
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            self?.didCopyFixCommand = false
+        }
+    }
+
     private func restoreCameraAccess(reason: String) async {
         isBusyDisabling = true
         status = .disabling
@@ -423,32 +440,48 @@ final class CameraGuard: ObservableObject {
         suggestRestartForStuckLED = false
         holdSuppressUntil = .distantPast
         lastFailureHint = ""
+        lastActionDetail = "Restoring camera…"
 
+        // 1) Ask root helper to unlock (remove profile + enable/kickstart daemon).
         if helperInstalled {
             await Task.detached(priority: .userInitiated) {
                 _ = CameraDisableHelper.requestUnlock()
             }.value
-            try? await Task.sleep(nanoseconds: 200_000_000)
+            try? await Task.sleep(nanoseconds: 400_000_000)
         }
 
-        // If profile still active, escalate once.
         restrictionActive = CameraDisableHelper.isRestrictionActive
-        if restrictionActive {
-            await Task.detached(priority: .userInitiated) {
-                _ = CameraDisableHelper.privilegedUnlockFull()
-            }.value
-            try? await Task.sleep(nanoseconds: 250_000_000)
-        }
+
+        // 2) Always run privileged unlock too — helper WatchPaths can miss; disable may have stuck.
+        //    macOS often caches the password briefly after earlier prompts.
+        await Task.detached(priority: .userInitiated) {
+            _ = CameraDisableHelper.privilegedUnlockFull()
+        }.value
+        try? await Task.sleep(nanoseconds: 500_000_000)
 
         restrictionActive = CameraDisableHelper.isRestrictionActive
         isBusyDisabling = false
-        lastActionDetail = reason
+
+        if restrictionActive {
+            lastFailureHint = "OS camera ban still on. Tap Restore camera, or copy the restore Terminal command."
+            lastActionDetail = "\(reason) — ban still active"
+        } else {
+            lastFailureHint = ""
+            lastActionDetail = "\(reason) — camera restored"
+        }
+
         activityLog.record(
             ActivityEvent(
                 app: AppIdentity(bundleID: "com.maccam.camera", processName: "Camera", displayName: "Camera"),
                 action: .allowed,
-                detail: reason
+                detail: lastActionDetail
             )
+        )
+        notify(
+            title: restrictionActive ? "Camera still blocked" : "Camera restored",
+            body: restrictionActive
+                ? "Enter your password if asked, or run the restore Terminal command."
+                : "Apps should see the camera again. Quit/reopen Photo Booth or FaceTime if needed."
         )
         refreshStatus()
     }

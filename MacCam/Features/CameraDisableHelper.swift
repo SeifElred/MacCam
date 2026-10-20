@@ -32,6 +32,19 @@ enum CameraDisableHelper {
         ].joined(separator: "; ")
     }
 
+    /// Restores camera after unlock (run if apps still cannot see the camera).
+    static var terminalRestoreCommand: String {
+        [
+            "sudo /usr/bin/profiles remove -identifier=\(CameraRestrictionProfile.payloadIdentifier)",
+            "sudo /usr/bin/profiles -R -p \(CameraRestrictionProfile.payloadIdentifier)",
+            "sudo /bin/launchctl enable system/com.apple.appleh13camerad",
+            "sudo /bin/launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.appleh13camerad.plist",
+            "sudo /bin/launchctl kickstart -k system/com.apple.appleh13camerad",
+            "sudo /usr/bin/killall -9 appleh13camerad",
+            "sudo /bin/launchctl kickstart -k system/com.apple.appleh13camerad"
+        ].joined(separator: "; ")
+    }
+
     static var isInstalled: Bool {
         FileManager.default.fileExists(atPath: scriptPath)
             && FileManager.default.fileExists(atPath: plistPath)
@@ -119,18 +132,26 @@ enum CameraDisableHelper {
             "chmod 644 '\(profilePath)'",
             "/usr/bin/profiles install -type configuration -path '\(profilePath)' 2>/dev/null || true",
             "for i in 1 2 3 4 5 6; do /usr/bin/killall -9 \(names) 2>/dev/null || true; /bin/sleep 0.12; done",
+            // bootout only — do NOT launchctl disable (that can stick and block unlock).
             "/bin/launchctl bootout system/com.apple.appleh13camerad 2>/dev/null || true",
-            "/bin/launchctl disable system/com.apple.appleh13camerad 2>/dev/null || true",
             "exit 0"
         ].joined(separator: "; ")
         return runAdminShell(shell)
     }
 
+    /// Always use this on Unlock — removes OS ban and brings appleh13camerad back.
     @discardableResult
     static func privilegedUnlockFull() -> Bool {
         let shell = [
             "/usr/bin/profiles remove -identifier=\(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true",
+            "/usr/bin/profiles -R -p \(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true",
             "/bin/launchctl enable system/com.apple.appleh13camerad 2>/dev/null || true",
+            "/bin/launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.appleh13camerad.plist 2>/dev/null || true",
+            "/bin/launchctl load -w /System/Library/LaunchDaemons/com.apple.appleh13camerad.plist 2>/dev/null || true",
+            "/bin/launchctl kickstart -k system/com.apple.appleh13camerad 2>/dev/null || true",
+            // If a zombie instance blocks devices, bounce once cleanly:
+            "/usr/bin/killall -9 appleh13camerad 2>/dev/null || true",
+            "/bin/sleep 0.3",
             "/bin/launchctl kickstart -k system/com.apple.appleh13camerad 2>/dev/null || true",
             "exit 0"
         ].joined(separator: "; ")
@@ -157,7 +178,11 @@ enum CameraDisableHelper {
     // MARK: - Internals
 
     private static func writeCommand(_ command: String) {
-        try? command.write(toFile: commandPath, atomically: true, encoding: .utf8)
+        // Write command before trigger so WatchPaths always sees the right action.
+        let cmdURL = URL(fileURLWithPath: commandPath)
+        try? (command + "\n").write(to: cmdURL, atomically: true, encoding: .utf8)
+        // Brief settle so the helper never races an empty/stale command file.
+        usleep(50_000)
         let stamp = "\(Date().timeIntervalSince1970)-\(command)\n"
         try? stamp.write(toFile: triggerPath, atomically: true, encoding: .utf8)
     }
@@ -186,7 +211,13 @@ enum CameraDisableHelper {
 
         if [ "$CMD" = "unlock" ]; then
           /usr/bin/profiles remove -identifier=\(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true
+          /usr/bin/profiles -R -p \(CameraRestrictionProfile.payloadIdentifier) 2>/dev/null || true
           /bin/launchctl enable system/com.apple.appleh13camerad 2>/dev/null || true
+          /bin/launchctl bootstrap system /System/Library/LaunchDaemons/com.apple.appleh13camerad.plist 2>/dev/null || true
+          /bin/launchctl load -w /System/Library/LaunchDaemons/com.apple.appleh13camerad.plist 2>/dev/null || true
+          /bin/launchctl kickstart -k system/com.apple.appleh13camerad 2>/dev/null || true
+          /usr/bin/killall -9 appleh13camerad 2>/dev/null || true
+          /bin/sleep 0.3
           /bin/launchctl kickstart -k system/com.apple.appleh13camerad 2>/dev/null || true
           exit 0
         fi
@@ -201,9 +232,8 @@ enum CameraDisableHelper {
           /bin/sleep 0.12
         done
 
-        # Keep daemon down while locked (do NOT kickstart appleh13camerad here).
+        # Temporary stop only — never "disable" (that sticks and blocks unlock).
         /bin/launchctl bootout system/com.apple.appleh13camerad 2>/dev/null || true
-        /bin/launchctl disable system/com.apple.appleh13camerad 2>/dev/null || true
         exit 0
         """
     }

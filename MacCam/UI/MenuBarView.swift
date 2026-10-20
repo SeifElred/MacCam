@@ -67,6 +67,16 @@ struct MenuBarView: View {
                     copyFixButton
                 }
             }
+            if !isLocked && (guardService.restrictionActive || !guardService.lastFailureHint.isEmpty) {
+                restoreCameraButton
+                if !guardService.lastFailureHint.isEmpty {
+                    Text(guardService.lastFailureHint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(DesignTokens.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                copyRestoreButton
+            }
             if let latest = activityLog.recent(1).first {
                 latestLine(latest)
             }
@@ -266,6 +276,50 @@ struct MenuBarView: View {
                 Image(systemName: "terminal")
                     .font(.system(size: 11, weight: .semibold))
                 Text(guardService.didCopyFixCommand ? "Copied — paste in Terminal" : "Copy Terminal fix command")
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(DesignTokens.textPrimary)
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(GlassRowBackground())
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var restoreCameraButton: some View {
+        Button {
+            guardService.restoreCameraNow()
+        } label: {
+            HStack {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(guardService.isBusyDisabling ? "Restoring camera…" : "Restore camera now")
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(DesignTokens.textPrimary)
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(DesignTokens.mintDim)
+            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.controlRadius, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(guardService.isBusyDisabling)
+    }
+
+    private var copyRestoreButton: some View {
+        Button {
+            guardService.copyTerminalRestoreCommand()
+        } label: {
+            HStack {
+                Image(systemName: "terminal")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(guardService.didCopyFixCommand ? "Copied restore command" : "Copy Terminal restore command")
                     .font(.system(size: 11, weight: .semibold))
                     .lineLimit(1)
                 Spacer(minLength: 0)
