@@ -8,10 +8,10 @@ final class CameraMonitor: ObservableObject {
     @Published private(set) var lastChecked: Date = .distantPast
 
     private var timer: Timer?
-    private let pollInterval: TimeInterval
+    private var pollInterval: TimeInterval
     private let includeExternal: Bool
 
-    init(pollInterval: TimeInterval = 0.25, includeExternal: Bool = true) {
+    init(pollInterval: TimeInterval = 0.10, includeExternal: Bool = true) {
         self.pollInterval = pollInterval
         self.includeExternal = includeExternal
     }
@@ -24,6 +24,14 @@ final class CameraMonitor: ObservableObject {
         }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+    }
+
+    func setPollInterval(_ interval: TimeInterval) {
+        guard abs(interval - pollInterval) > 0.001 else { return }
+        pollInterval = interval
+        if timer != nil {
+            start()
+        }
     }
 
     func stop() {

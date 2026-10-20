@@ -6,7 +6,6 @@ final class GuardDecisionEngineTests: XCTestCase {
         let action = GuardDecisionEngine.action(
             mode: .unlocked,
             cameraOn: true,
-            sessionAlreadyHandled: false,
             allowOnceActive: false,
             policy: .unknown
         )
@@ -17,7 +16,6 @@ final class GuardDecisionEngineTests: XCTestCase {
         let action = GuardDecisionEngine.action(
             mode: .locked,
             cameraOn: false,
-            sessionAlreadyHandled: false,
             allowOnceActive: false,
             policy: .unknown
         )
@@ -28,7 +26,6 @@ final class GuardDecisionEngineTests: XCTestCase {
         let action = GuardDecisionEngine.action(
             mode: .locked,
             cameraOn: true,
-            sessionAlreadyHandled: false,
             allowOnceActive: false,
             policy: .unknown
         )
@@ -39,7 +36,6 @@ final class GuardDecisionEngineTests: XCTestCase {
         let action = GuardDecisionEngine.action(
             mode: .locked,
             cameraOn: true,
-            sessionAlreadyHandled: false,
             allowOnceActive: false,
             policy: .allowlisted
         )
@@ -50,7 +46,6 @@ final class GuardDecisionEngineTests: XCTestCase {
         let action = GuardDecisionEngine.action(
             mode: .locked,
             cameraOn: true,
-            sessionAlreadyHandled: false,
             allowOnceActive: false,
             policy: .blocklisted
         )
@@ -61,19 +56,7 @@ final class GuardDecisionEngineTests: XCTestCase {
         let action = GuardDecisionEngine.action(
             mode: .locked,
             cameraOn: true,
-            sessionAlreadyHandled: false,
             allowOnceActive: true,
-            policy: .unknown
-        )
-        XCTAssertEqual(action, .ignore)
-    }
-
-    func testAlreadyHandledSkips() {
-        let action = GuardDecisionEngine.action(
-            mode: .locked,
-            cameraOn: true,
-            sessionAlreadyHandled: true,
-            allowOnceActive: false,
             policy: .unknown
         )
         XCTAssertEqual(action, .ignore)

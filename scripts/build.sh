@@ -38,6 +38,7 @@ SOURCES=(
   MacCam/UI/MenuBarView.swift
   MacCam/UI/SettingsSection.swift
   MacCam/UI/StatusIcon.swift
+  MacCam/UI/VisualEffectBackground.swift
 )
 
 echo "==> Compiling (swiftc → $TARGET)"

@@ -39,9 +39,9 @@ If macOS says the app can’t be opened:
 
 ### When an app tries the camera while locked
 
-MacCam **does not freeze apps** (freezing leaves the green LED stuck on). It quits the process that opened the camera so the hardware releases and the LED turns off.
+MacCam polls every ~100ms and **force-stops** any non-allowed app holding the camera until CoreMediaIO reports the camera (and LED) off. Freezing is never used — that would leave the LED stuck on.
 
-- Unknown / block-listed apps → stopped automatically
+- Unknown / block-listed apps → stopped automatically (keeps trying while the LED is on)
 - Allow-listed apps → left alone
 - To use FaceTime/Zoom: **Unlock** first (or add the app to the Allow list)
 

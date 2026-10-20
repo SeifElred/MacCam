@@ -10,15 +10,18 @@ enum GuardMode: String, Codable {
 enum GuardStatus: Equatable {
     case protected
     case unlocked
+    case clearing(appName: String)
     case blocked(appName: String)
     case cameraActive(appName: String)
 
     var label: String {
         switch self {
         case .protected:
-            return "Protected — camera locked"
+            return "Protected — LED off"
         case .unlocked:
             return "Camera unlocked"
+        case .clearing(let name):
+            return "Stopping \(name)…"
         case .blocked(let name):
             return "Blocked \(name)"
         case .cameraActive(let name):
@@ -28,21 +31,21 @@ enum GuardStatus: Equatable {
 }
 
 protocol ProcessController {
-    /// Ask the process to quit (releases camera cleanly when possible).
-    func terminate(pid: pid_t) -> Bool
-    /// Force-kill so a stuck camera hold is released (never SIGSTOP).
     func forceKill(pid: pid_t) -> Bool
 }
 
 struct POSIXProcessController: ProcessController {
-    func terminate(pid: pid_t) -> Bool { kill(pid, SIGTERM) == 0 }
+    /// SIGKILL so the process cannot keep the camera (and green LED) held open.
     func forceKill(pid: pid_t) -> Bool { kill(pid, SIGKILL) == 0 }
 }
 
 @MainActor
 final class CameraGuard: ObservableObject {
     @Published var mode: GuardMode {
-        didSet { defaults.set(mode.rawValue, forKey: modeKey) }
+        didSet {
+            defaults.set(mode.rawValue, forKey: modeKey)
+            syncMonitorPace()
+        }
     }
     @Published var notifyOnAttempt: Bool {
         didSet { defaults.set(notifyOnAttempt, forKey: notifyKey) }
@@ -61,16 +64,18 @@ final class CameraGuard: ObservableObject {
     private let modeKey = "macCam.mode"
     private let notifyKey = "macCam.notifyOnAttempt"
 
-    private var handledSessionKey: String?
     private var allowOnceSession: Set<String> = []
-    private var forceKillPIDs: Set<pid_t> = []
+    private var notifyCooldown: [String: Date] = [:]
+    private var loggedAllowKeys: Set<String> = []
     private var statusClearWork: DispatchWorkItem?
     private var tickTimer: Timer?
+    private let lockedTick: TimeInterval = 0.10
+    private let unlockedTick: TimeInterval = 0.35
 
     init(
         policy: PolicyStore = PolicyStore(),
         activityLog: ActivityLog = ActivityLog(),
-        monitor: CameraMonitor = CameraMonitor(),
+        monitor: CameraMonitor = CameraMonitor(pollInterval: 0.10),
         identifier: ProcessIdentifier = ProcessIdentifier(),
         processController: ProcessController = POSIXProcessController(),
         defaults: UserDefaults = .standard
@@ -93,14 +98,7 @@ final class CameraGuard: ObservableObject {
 
     func start() {
         monitor.start()
-        tickTimer?.invalidate()
-        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.tick()
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        tickTimer = timer
+        restartTickTimer()
         requestNotificationPermissionIfNeeded()
     }
 
@@ -108,100 +106,164 @@ final class CameraGuard: ObservableObject {
         tickTimer?.invalidate()
         tickTimer = nil
         monitor.stop()
-        forceKillPIDs.removeAll()
     }
 
     func setLocked(_ locked: Bool) {
         mode = locked ? .locked : .unlocked
         if locked {
             allowOnceSession.removeAll()
-            handledSessionKey = nil
-            forceKillPIDs.removeAll()
+            loggedAllowKeys.removeAll()
+            // Immediately clear any active camera hold.
+            enforceHardLock()
         }
         lastBlockedName = nil
+        restartTickTimer()
         refreshStatus()
     }
 
-    /// Allow an app for this MacCam session without adding to the permanent allow list.
     func allowOnce(_ app: AppIdentity) {
         allowOnceSession.insert(sessionKey(for: app))
     }
 
     // MARK: - Internals
 
+    private func syncMonitorPace() {
+        monitor.setPollInterval(mode == .locked ? lockedTick : unlockedTick)
+        restartTickTimer()
+    }
+
+    private func restartTickTimer() {
+        tickTimer?.invalidate()
+        let interval = mode == .locked ? lockedTick : unlockedTick
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.tick()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        tickTimer = timer
+    }
+
     private func tick() {
         monitor.refresh()
-        enforceIfNeeded()
+        if mode == .locked {
+            enforceHardLock()
+        }
         refreshStatus()
     }
 
-    private func enforceIfNeeded() {
-        if mode == .locked, !monitor.isCameraOn {
-            handledSessionKey = nil
-            forceKillPIDs.removeAll()
+    /// While locked: keep force-killing non-allowed camera users until CoreMediaIO reports camera off.
+    private func enforceHardLock() {
+        guard mode == .locked else { return }
+        guard monitor.isCameraOn else {
+            notifyCooldown = notifyCooldown.filter { _, date in
+                Date().timeIntervalSince(date) < 30
+            }
             return
         }
 
-        guard let candidate = identifier.identifyLikelyCameraUser() else { return }
-        let key = sessionKey(for: candidate.app)
-        let decision = policy.decision(for: candidate.app)
-        let action = GuardDecisionEngine.action(
-            mode: mode,
-            cameraOn: monitor.isCameraOn,
-            sessionAlreadyHandled: handledSessionKey == key,
-            allowOnceActive: allowOnceSession.contains(key),
-            policy: decision
+        let candidates = identifier.scoreCandidates(
+            runningApps: NSWorkspace.shared.runningApplications,
+            frontmost: NSWorkspace.shared.frontmostApplication
         )
 
-        switch action {
-        case .ignore:
-            return
-        case .allowSilently:
-            activityLog.record(ActivityEvent(app: candidate.app, action: .allowed, detail: "Allowlist"))
-            handledSessionKey = key
-        case .blockNow:
-            blockCameraUser(candidate, key: key, detail: decision == .blocklisted ? "Blocklist" : "Locked")
+        var targets: [ProcessCandidate] = []
+        for candidate in candidates.prefix(12) {
+            let key = sessionKey(for: candidate.app)
+            let decision = policy.decision(for: candidate.app)
+            let action = GuardDecisionEngine.action(
+                mode: mode,
+                cameraOn: true,
+                allowOnceActive: allowOnceSession.contains(key),
+                policy: decision
+            )
+            switch action {
+            case .ignore:
+                continue
+            case .allowSilently:
+                if !loggedAllowKeys.contains(key) {
+                    loggedAllowKeys.insert(key)
+                    activityLog.record(ActivityEvent(app: candidate.app, action: .allowed, detail: "Allowlist"))
+                }
+            case .blockNow:
+                targets.append(candidate)
+            }
         }
-    }
 
-    private func blockCameraUser(_ candidate: ProcessCandidate, key: String, detail: String) {
-        // Never SIGSTOP — freezing keeps the camera open and the green LED stuck on.
-        // First try a normal quit; if the LED/camera is still held next tick, force-kill.
-        if forceKillPIDs.contains(candidate.pid) {
-            _ = processController.forceKill(pid: candidate.pid)
-            handledSessionKey = key
-            return
+        // Camera is on but heuristics found nobody — still stop the frontmost user app.
+        if targets.isEmpty,
+           let front = NSWorkspace.shared.frontmostApplication,
+           front.processIdentifier != getpid(),
+           front.activationPolicy == .regular {
+            let app = AppIdentity(
+                bundleID: front.bundleIdentifier ?? "",
+                processName: front.localizedName ?? "App",
+                displayName: front.localizedName
+            )
+            let key = sessionKey(for: app)
+            if policy.decision(for: app) != .allowlisted, !allowOnceSession.contains(key) {
+                targets.append(
+                    ProcessCandidate(
+                        pid: front.processIdentifier,
+                        app: app,
+                        score: 1,
+                        confidence: 0.2
+                    )
+                )
+            }
         }
 
-        _ = processController.terminate(pid: candidate.pid)
-        forceKillPIDs.insert(candidate.pid)
-        lastBlockedName = candidate.app.displayName
-        activityLog.record(ActivityEvent(app: candidate.app, action: .blocked, detail: detail))
-        notify(
-            title: "Camera blocked",
-            body: "\(candidate.app.displayName) was stopped. Unlock MacCam (or allow the app) to use the camera."
-        )
+        guard !targets.isEmpty else { return }
+
+        for target in targets {
+            _ = processController.forceKill(pid: target.pid)
+            recordBlockIfNeeded(target.app)
+        }
+
+        // Re-read immediately; if still on, next tick continues killing.
+        monitor.refresh()
+        lastBlockedName = targets.first?.app.displayName
         iconState = .alert
         scheduleStatusClear()
+    }
+
+    private func recordBlockIfNeeded(_ app: AppIdentity) {
+        let key = sessionKey(for: app)
+        let now = Date()
+        if let last = notifyCooldown[key], now.timeIntervalSince(last) < 8 {
+            return
+        }
+        notifyCooldown[key] = now
+        activityLog.record(ActivityEvent(app: app, action: .blocked, detail: "Locked"))
+        notify(
+            title: "Camera blocked",
+            body: "\(app.displayName) was stopped so the camera LED stays off. Unlock MacCam to use the camera."
+        )
     }
 
     private func scheduleStatusClear() {
         statusClearWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             Task { @MainActor in
-                self?.lastBlockedName = nil
-                self?.refreshStatus()
+                guard let self else { return }
+                if !self.monitor.isCameraOn {
+                    self.lastBlockedName = nil
+                    self.refreshStatus()
+                }
             }
         }
         statusClearWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: work)
     }
 
     private func refreshStatus() {
         switch mode {
         case .locked:
-            if let name = lastBlockedName {
+            if monitor.isCameraOn {
                 iconState = .alert
+                status = .clearing(appName: lastBlockedName ?? "camera app")
+            } else if let name = lastBlockedName {
+                iconState = .locked
                 status = .blocked(appName: name)
             } else {
                 iconState = .locked
@@ -211,17 +273,8 @@ final class CameraGuard: ObservableObject {
             iconState = .unlocked
             if monitor.isCameraOn, let candidate = identifier.identifyLikelyCameraUser() {
                 status = .cameraActive(appName: candidate.app.displayName)
-                if handledSessionKey != sessionKey(for: candidate.app) {
-                    activityLog.record(
-                        ActivityEvent(app: candidate.app, action: .unlockedUse, detail: "Observed while unlocked")
-                    )
-                    handledSessionKey = sessionKey(for: candidate.app)
-                }
             } else {
                 status = .unlocked
-                if !monitor.isCameraOn {
-                    handledSessionKey = nil
-                }
             }
         }
     }
