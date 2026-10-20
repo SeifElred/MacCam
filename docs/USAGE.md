@@ -17,13 +17,14 @@ open dist/MacCam.app
 
 ## Required once (this is what makes LED-off reliable)
 
-1. Open the MacCam menu (shield icon).
-2. Leave **Privacy Lock On**.
-3. Click **Enable LED protection (one-time)**.
-4. Enter your **Mac password** when macOS asks.
-5. Wait until status says **Camera disabled — LED off**.
+1. Open MacCam — with lock on it **asks for your password automatically**.
+2. Enter your **Mac password** (do not cancel).
+3. Wait until status says **Camera disabled — LED off**.
 
-That installs a small root helper. After that, MacCam can turn the camera/LED off whenever lock is on — without quitting your apps.
+That installs a small root helper. After that, MacCam keeps the camera/LED cleared while locked (fast retries + short hold so apps can’t instantly re-grab).
+
+If password was cancelled: open the menu → **Enable LED protection** again.  
+If still stuck: **Copy Terminal fix command** → paste in Terminal → Return → password.
 
 ## Everyday
 

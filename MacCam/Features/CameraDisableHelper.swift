@@ -1,7 +1,7 @@
 import Foundation
 
 /// One-time root LaunchDaemon so MacCam can turn the M1/M-series camera (and LED) off
-/// without force-quitting user apps. Password is required only for install.
+/// without force-quitting user apps. Password is required only for install (and rare fallbacks).
 enum CameraDisableHelper {
     static let label = "com.maccam.cameradisable"
     static let supportDir = "/Library/Application Support/MacCam"
@@ -19,24 +19,38 @@ enum CameraDisableHelper {
         "ContinuityCaptureAgent"
     ]
 
+    static var terminalFixCommand: String {
+        let names = daemonNames.joined(separator: " ")
+        return [
+            "sudo /usr/bin/killall -9 \(names)",
+            "sleep 0.2",
+            "sudo /usr/bin/killall -9 \(names)",
+            "sleep 0.2",
+            "sudo /usr/bin/killall -9 \(names)"
+        ].joined(separator: "; ")
+    }
+
     static var isInstalled: Bool {
         FileManager.default.fileExists(atPath: scriptPath)
             && FileManager.default.fileExists(atPath: plistPath)
     }
 
-    /// Installs root helper (one macOS password dialog).
+    /// Helper files exist and trigger is writable (ready for password-free disables).
+    static var isHealthy: Bool {
+        guard isInstalled else { return false }
+        return FileManager.default.isWritableFile(atPath: triggerPath)
+            || FileManager.default.isWritableFile(atPath: supportDir)
+    }
+
+    /// Installs root helper (one macOS password dialog) and runs a multi-pulse clear immediately.
     @discardableResult
     static func install() -> Bool {
         let script = disableScriptContents()
         let plist = launchDaemonPlist()
-
-        // Escape for embedding inside `do shell script "..."`.
         let scriptB64 = Data(script.utf8).base64EncodedString()
         let plistB64 = Data(plist.utf8).base64EncodedString()
 
-        // Single-line shell so osascript quoting stays reliable.
         let shell = [
-            "set -e",
             "mkdir -p '\(supportDir)'",
             "echo '\(scriptB64)' | /usr/bin/base64 -D > '\(scriptPath)'",
             "chmod 755 '\(scriptPath)'",
@@ -46,39 +60,51 @@ enum CameraDisableHelper {
             "touch '\(triggerPath)'",
             "chmod 666 '\(triggerPath)'",
             "/bin/launchctl bootout system/\(label) 2>/dev/null || true",
-            "/bin/launchctl bootstrap system '\(plistPath)' 2>/dev/null || /bin/launchctl load -w '\(plistPath)' 2>/dev/null || true",
+            "/bin/launchctl unload '\(plistPath)' 2>/dev/null || true",
+            "/bin/launchctl bootstrap system '\(plistPath)' 2>/dev/null || true",
+            "/bin/launchctl load -w '\(plistPath)' 2>/dev/null || true",
             "/bin/launchctl enable system/\(label) 2>/dev/null || true",
+            "/bin/launchctl kickstart -k system/\(label) 2>/dev/null || true",
             "'\(scriptPath)'",
+            "test -f '\(scriptPath)'",
+            "test -f '\(plistPath)'",
             "exit 0"
         ].joined(separator: "; ")
 
-        return runAdminShell(shell)
+        let ok = runAdminShell(shell)
+        return ok && isInstalled
     }
 
-    /// Ask the root helper to bounce camera services (no password if installed).
+    /// Ask the root helper to bounce camera services (no password if installed + healthy).
     @discardableResult
     static func requestDisable() -> Bool {
-        if isInstalled {
-            // WatchPaths fires when the trigger file is written.
-            let stamp = "\(Date().timeIntervalSince1970)\n"
-            do {
-                try stamp.write(toFile: triggerPath, atomically: true, encoding: .utf8)
-            } catch {
-                // Fallback: run script via admin if trigger isn't writable yet.
-                return runAdminShell("'\(scriptPath)'; exit 0")
-            }
-            // Also invoke directly via launchctl kickstart when possible.
-            _ = runProcess("/bin/launchctl", arguments: ["kickstart", "-k", "system/\(label)"])
-            return true
+        guard isInstalled else { return false }
+
+        let stamp = "\(Date().timeIntervalSince1970)-\(UUID().uuidString)\n"
+        do {
+            try stamp.write(toFile: triggerPath, atomically: true, encoding: .utf8)
+        } catch {
+            // Trigger not writable — run script with admin once.
+            return runAdminShell("'\(scriptPath)'; exit 0")
         }
-        return false
+        _ = runProcess("/bin/launchctl", arguments: ["kickstart", "-k", "system/\(label)"])
+        // Direct root script execution isn't possible without admin; WatchPaths + kickstart handle it.
+        // Also try executing via launchctl as user may have rights on some systems:
+        _ = runProcess("/bin/bash", arguments: [scriptPath])
+        return true
     }
 
-    /// Privileged one-shot kill (password each time unless auth is cached). Used as fallback.
+    /// One password: multi-pulse kill loop (reduces “camera grabs again” races).
     @discardableResult
     static func privilegedKillDaemons() -> Bool {
-        let names = daemonNames.joined(separator: " ")
-        let shell = "/usr/bin/killall -9 \(names) 2>/dev/null; exit 0"
+        let names = daemonNames.map { "\"\($0)\"" }.joined(separator: " ")
+        let shell = [
+            "for i in 1 2 3 4 5 6; do",
+            "/usr/bin/killall -9 \(names) 2>/dev/null || true;",
+            "/bin/sleep 0.12;",
+            "done",
+            "exit 0"
+        ].joined(separator: " ")
         return runAdminShell(shell)
     }
 
@@ -98,12 +124,17 @@ enum CameraDisableHelper {
     // MARK: - Embedded files
 
     private static func disableScriptContents() -> String {
-        let kills = daemonNames.map { "  /usr/bin/killall -9 \"\($0)\" 2>/dev/null || true" }.joined(separator: "\n")
+        let killLines = daemonNames
+            .map { "  /usr/bin/killall -9 \"\($0)\" 2>/dev/null || true" }
+            .joined(separator: "\n")
         return """
         #!/bin/bash
-        # MacCam — disable built-in camera hardware (M1/Apple Silicon + Intel)
-        # Runs as root via LaunchDaemon. Does not quit user apps.
-        \(kills)
+        # MacCam — disable built-in camera hardware (M1 Pro / Apple Silicon)
+        # Runs as root. Does not quit user apps. Multi-pulse to beat re-acquire races.
+        for i in 1 2 3 4 5 6; do
+        \(killLines)
+          /bin/sleep 0.12
+        done
         exit 0
         """
     }
@@ -127,6 +158,8 @@ enum CameraDisableHelper {
         	</array>
         	<key>RunAtLoad</key>
         	<true/>
+        	<key>ThrottleInterval</key>
+        	<integer>0</integer>
         	<key>StandardOutPath</key>
         	<string>\(supportDir)/helper.log</string>
         	<key>StandardErrorPath</key>

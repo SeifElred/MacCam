@@ -51,8 +51,17 @@ struct MenuBarView: View {
             header
             lockControl
             statusChip
-            if isLocked && (!guardService.helperInstalled || guardService.needsAdminAuthorization) {
+            if isLocked && (!guardService.helperInstalled || guardService.needsAdminAuthorization || guardService.monitor.isCameraOn) {
                 setupButton
+                if !guardService.lastFailureHint.isEmpty {
+                    Text(guardService.lastFailureHint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(DesignTokens.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if guardService.needsAdminAuthorization || guardService.monitor.isCameraOn {
+                    copyFixButton
+                }
             }
             if let latest = activityLog.recent(1).first {
                 latestLine(latest)
@@ -192,6 +201,27 @@ struct MenuBarView: View {
         if guardService.isBusyDisabling { return "Working… enter password if asked" }
         if guardService.helperInstalled { return "Turn LED off now" }
         return "Enable LED protection (one-time)"
+    }
+
+    private var copyFixButton: some View {
+        Button {
+            guardService.copyTerminalFixCommand()
+        } label: {
+            HStack {
+                Image(systemName: "terminal")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(guardService.didCopyFixCommand ? "Copied — paste in Terminal" : "Copy Terminal fix command")
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(DesignTokens.textPrimary)
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(GlassRowBackground())
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func latestLine(_ event: ActivityEvent) -> some View {
