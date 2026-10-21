@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <b>A menu-bar camera lock for your Mac.</b><br>
-  Apps cannot open the camera until you tap Allow. Quit the call, and it locks again.
+  <b>Menu-bar camera lock for macOS.</b><br>
+  The camera stays closed until you tap Allow. Quit the call, and it locks again.
 </p>
 
 MacCam sits next to the clock. There is no Dock icon. The first time you turn the lock on, you enter your Mac password once and install a removable profile named **MacCam Disable Camera**. After that, opening Photo Booth, FaceTime, Zoom, or any other camera app shows three choices:
