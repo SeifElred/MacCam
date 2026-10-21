@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.svg" alt="MacCam — the camera stays off until you say Allow" width="100%">
+  <img src="docs/banner.png" alt="MacCam. The camera stays off until you say Allow." width="100%">
 </p>
 
 <p align="center">
