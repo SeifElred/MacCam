@@ -2,6 +2,8 @@
 
 MacCam lives in the menu bar. Click the camera icon to open the panel.
 
+Stuck? See the [FAQ](FAQ.md).
+
 ## First run
 
 ```bash

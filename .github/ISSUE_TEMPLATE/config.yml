@@ -3,3 +3,6 @@ contact_links:
   - name: Using MacCam
     url: https://github.com/SeifElred/MacCam/blob/main/docs/USAGE.md
     about: Install, Allow / Deny, restore, and uninstall
+  - name: FAQ
+    url: https://github.com/SeifElred/MacCam/blob/main/docs/FAQ.md
+    about: No Dock icon, profile error -205, green LED, Allow with a black preview
