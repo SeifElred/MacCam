@@ -1,0 +1,38 @@
+name: Bug
+description: Something in MacCam did not behave as the guide describes
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: mac
+    attributes:
+      label: Mac
+      description: "Example: MacBook Pro M1 Pro, macOS 15.6"
+      placeholder: Model and macOS version
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Camera Lock / Allow prompt
+        - Profile install or remove
+        - Green LED
+        - Launch at login
+        - Build
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra
+      description: Menu status text, or the output of `sudo profiles list -all | grep -i maccam`. Do not paste passwords.

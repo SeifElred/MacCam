@@ -1,37 +1,45 @@
-# MacCam — Manual hardware QA
+# Manual QA
 
-Run after `./scripts/build.sh && open dist/MacCam.app`.
+Run on a Mac after:
 
-## Prep
+```bash
+./scripts/build.sh
+open dist/MacCam.app
+```
 
-- [ ] Quit old MacCam builds
-- [ ] Open Photo Booth so the green LED is on
-- [ ] Confirm MacCam icon is in the menu bar with **Privacy Lock On**
+Quit any older MacCam process first: `killall MacCam`.
 
-## Disable path (no app force-quit)
+## Setup
 
-| # | Steps | Expected |
-| --- | --- | --- |
-| 1 | Open MacCam while Photo Booth shows camera; Install ban if prompted | Photo Booth stays open; preview fails / no camera; diagnostics **OS ban = camera blocked**, **Sensor = poll paused** |
-| 2 | Lock On → try FaceTime camera | FaceTime stays open; camera unavailable |
-| 3 | Unlock → open Photo Booth | Camera works; LED on while previewing |
-| 4 | Lock again | Ban re-applied (Install if needed); apps blocked again |
-| 5 | Launch at Login | Survives logout/login with lock on and ban active |
-| 6 | With ban on, leave MacCam idle 30s | `log stream` for `appleh13camerad` shows no repeating `ISP_PowerOnCamera` from MacCam |
+- [ ] Menu-bar camera icon appears. No Dock icon.
+- [ ] **Enable Camera Lock (once)** asks for the Mac password a single time.
+- [ ] **MacCam Disable Camera** can be installed from System Settings → General → Device Management.
+- [ ] `sudo profiles list -all` includes `com.maccam.camera.disable`.
 
-## LED honesty
+## Lock and Allow
 
 | # | Steps | Expected |
 | --- | --- | --- |
-| 7 | Ban on, Photo Booth blocked, physical LED still green | UI does **not** promise “LED off”; hint suggests restart / cover / Apple Care |
-| 8 | Restart once with ban installed | LED often clears; if not, hardware/cover only |
+| 1 | Lock on. Open Photo Booth. Tap **Deny** | Photo Booth stays open and has no camera |
+| 2 | Open Photo Booth again. Tap **Allow** | Preview works. LED on while previewing |
+| 3 | Quit Photo Booth | Lock returns. After a few seconds the LED can go dark |
+| 4 | Open Photo Booth. Tap **Allow 15 min** | Preview works. Lock returns when the timer ends or the app quits |
+| 5 | Add an app to the Allow List and open it | No prompt. Camera works for that app |
+| 6 | Launch at Login, log out and back in | Menu-bar icon returns with the lock on |
 
-## UI
+## LED
 
 | # | Steps | Expected |
 | --- | --- | --- |
-| 9 | Open menu | Glass panel; status “Apps blocked from camera” (or LED honesty) when ban on |
-| 10 | Toggle lock | Copy switches between blocked / available |
+| 7 | Lock on, no camera app, wait 10 seconds | LED follows ISP power-off. UI does not claim it flipped the LED wire |
+| 8 | LED still green with no client after a restart | UI stays honest. Cover or Apple Support, not a kill loop |
+
+## Restore
+
+| # | Steps | Expected |
+| --- | --- | --- |
+| 9 | Turn the lock off, or tap **Restore Camera** | Photo Booth sees the camera again after a reopen |
+| 10 | Remove the profile in Device Management | Same result. User files unchanged |
 
 ## Automated
 

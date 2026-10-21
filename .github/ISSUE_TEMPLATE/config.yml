@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Using MacCam
+    url: https://github.com/SeifElred/MacCam/blob/main/docs/USAGE.md
+    about: Install, Allow / Deny, restore, and uninstall
